@@ -5,6 +5,8 @@
 #include <cassert>
 #include <cmath>
 #include <functional>
+#include <type_traits>
+#include <cstring>
 
 using namespace std;
 const int MAP_WIDTH = 23;
@@ -21,7 +23,7 @@ const int LOW_DAMAGE = 25;
 const int HIGH_DAMAGE = 50;
 const int MINE_DAMAGE = 25;
 const int NEAR_MINE_DAMAGE = 10;
-
+const int REWARD_RUM_BARREL_VALUE = 30;
 enum action_e {NONE,MINE,PORT,STARBOARD,FASTER,SLOWER,WAIT,FIRE};
 
 
@@ -55,8 +57,24 @@ public:
   T* begin() {return &arr[0];}
   T* end()
   {
-    assert(size > 0);
-    return &arr[size - 1];
+    //assert(size > 0);
+    return &arr[size];
+  }
+
+  void remove_to_rem()
+  {
+    T arr_tmp[N];
+    memcpy(arr_tmp,arr,size*sizeof(T));
+    int j = 0;
+    for(int i=0;i<size;++i)
+      {
+	if(arr_tmp[i].to_remove)
+	  {
+	    continue;
+	  }
+	arr[j++] = arr_tmp[i];
+      }
+    size = j;
   }
 };
 
@@ -141,10 +159,16 @@ struct pos
   }
   
 private:
-   static constexpr int DIRECTIONS_EVEN[6][2] =  { { 1, 0 }, { 0, -1 }, { -1, -1 }, { -1, 0 }, { -1, 1 }, { 0, 1 } };
-  static constexpr int DIRECTIONS_ODD[6][2] =  { { 1, 0 }, { 1, -1 }, { 0, -1 }, { -1, 0 }, { 0, 1 }, { 1, 1 } };
+  int DIRECTIONS_EVEN[6][2] =  { { 1, 0 }, { 0, -1 }, { -1, -1 }, { -1, 0 }, { -1, 1 }, { 0, 1 } };
+  int DIRECTIONS_ODD[6][2] =  { { 1, 0 }, { 1, -1 }, { 0, -1 }, { -1, 0 }, { 0, 1 }, { 1, 1 } };
 
 };
+
+ostream& operator<<(ostream& out, const pos& p)
+{
+    out << "(" << p.x << ", " << p.y << ")"; 
+    return out;
+}
 
 struct action
 {
@@ -165,10 +189,13 @@ struct entity
 struct ship : public entity
 {
   ship():entity(),ori(0),speed(0),rhum(0){}
-  ship(short id,pos p,short ori_,short speed_,short rhum_):entity(id,p),ori(ori_),speed(speed_),rhum(rhum_){}
+  ship(short id,pos p,short ori_,short speed_,short rhum_):entity(id,p),ori(ori_),speed(speed_),rhum(rhum_),initial_rhum(rhum_){}
   int ori,speed,rhum;
 
-  int cannonCooldown = COOLDOWN_CANNON;
+  bool killed_by_exp = false;
+  int initial_rhum;
+  int cannonCooldown = 0;
+  int mineCooldown = 0;
   action perf_action;// = NONE;
 
   pos newPosition{-1,-1};
@@ -182,6 +209,7 @@ struct ship : public entity
     if (rhum <= 0)
       {
 	rhum = 0;
+	killed_by_exp = true;
       }
   }
 
@@ -208,7 +236,8 @@ struct ship : public entity
   
   inline bool newBowIntersect(const ship &other) const
   {
-    return  (newBowCoordinate == (other.newBowCoordinate) || newBowCoordinate == (other.newPosition) || newBowCoordinate == (other.newSternCoordinate));
+    //cerr << newBowCoordinate << " oth " <<  other.newBowCoordinate << endl;
+    return  (newBowCoordinate == other.newBowCoordinate || newBowCoordinate == other.newPosition || newBowCoordinate == other.newSternCoordinate);
   }
 
   inline bool newBowIntersect(const fast_vect<ship,3>& s1,const fast_vect<ship,3>& s2) const
@@ -223,11 +252,11 @@ struct ship : public entity
 	  }
 	else
 	  {
-	    cur_ship = &s2.arr[i-s2.size];
+	    cur_ship = &s2.arr[i-s1.size];
 	  }
 
 	
-	if (cur_ship->id == id && newBowIntersect(*cur_ship))
+	if (cur_ship->id != id && newBowIntersect(*cur_ship))
 	  {
 	    return true;
 	  }
@@ -270,11 +299,7 @@ struct mine : public entity
 
 
 
-ostream& operator<<(ostream& out, const pos& p)
-{
-    out << "(" << p.x << ", " << p.y << ")"; 
-    return out;
-}
+
 
 ostream& operator<<(ostream& out, const ship& s)
 {
@@ -335,7 +360,10 @@ public:
 	int arg4;
 	cin >> entityId >> entityType >> x >> y >> arg1 >> arg2 >> arg3 >> arg4; cin.ignore();
 
-	cerr << entityId << endl;
+	cerr << entityId <<" "<< entityType <<" "<< x<<" " << y<<" " << arg1<<" " << arg2<<" " << arg3 <<" "<< arg4 << endl;
+
+	
+	//cerr << entityId << endl;
 	if(entityType == "SHIP")
 	  {
 	    if(arg4 == 1)
@@ -377,7 +405,7 @@ public:
 
     //update cannonball
 
-    for_each(new_gs.balls.begin(),new_gs.balls.end(),[](ball &b){assert(b.turn > 0);--b.turn;});
+    for_each(new_gs.balls.begin(),new_gs.balls.end(),[](ball &b){assert(b.turn > -1);if(b.turn == 0) b.to_remove = true;--b.turn;});
 
     
     for(int i=0;i<a_play.size;++i)
@@ -393,10 +421,44 @@ public:
 
 	new_gs.adv_ships.arr[i].perf_action = a_adv.arr[i];
       }
+
+
+    apply_action(new_gs);
+    move_ships(new_gs);
+    //rotate_ships(new_gs);
+
+    //remove 0 ship
+    for(ship &s: new_gs.adv_ships)
+      {
+	if(s.rhum <= 0)
+	  {
+	    s.to_remove = true;
+	    //add new rum
+	    if(s.killed_by_exp)
+	      new_gs.bars.push_back(barrel(new_gs.get_new_id(),s.p,min(s.initial_rhum,REWARD_RUM_BARREL_VALUE)));
+	  }
+      }
+
+    for(ship &s: new_gs.my_ships)
+      {
+	if(s.rhum <= 0)
+	  {
+	    s.to_remove = true;
+	    //add new rum
+	    if(s.killed_by_exp)
+	      new_gs.bars.push_back(barrel(new_gs.get_new_id(),s.p,min(s.initial_rhum,REWARD_RUM_BARREL_VALUE)));
+	  }
+      }
+      
+    new_gs.my_ships.remove_to_rem();
+    new_gs.adv_ships.remove_to_rem();
+    new_gs.bars.remove_to_rem();
+    new_gs.balls.remove_to_rem();
+    new_gs.mines.remove_to_rem();
     
   }
   
-  void apply_action(game_stat& new_gs)
+  void apply_action(game_stat& new_gs) const
   {
     
     fv_ships_t *all_ships[2] = {&new_gs.adv_ships,&new_gs.my_ships};
@@ -405,8 +467,21 @@ public:
       {
 	for(ship &s:*all_ships[p]) //move all ships (adv and me)
 	  {
+	    if (s.mineCooldown > 0)
+	      {
+		s.mineCooldown--;
+	      }
+	    if (s.cannonCooldown > 0)
+	      {
+		s.cannonCooldown--;
+	      }
+
+	    s.newOrientation = s.ori;
+
 	    switch (s.perf_action.act)
 	      {
+	      case WAIT:
+		break;
 	      case FASTER:
 		if(s.speed < 2) ++(s.speed);
 		break;
@@ -437,14 +512,18 @@ public:
 		    }
 		}
 		break;
+	      default:
+		assert(false);
+	      
 	      }
+
 	  }
       }
   }
 
   
   //function<void(ship&)> fct_move_ship = [&new_gs](ship &s)
-  void move_ship(game_stat& new_gs)
+  void move_ships(game_stat& new_gs) const
   {
 
     fv_ships_t *all_ships[2] = {&new_gs.adv_ships,&new_gs.my_ships};
@@ -456,6 +535,10 @@ public:
 	  {
 	    for(ship &s:*all_ships[p])
 	      {
+		s.newPosition = s.p;
+		s.newBowCoordinate = s.bow();
+		s.newSternCoordinate = s.stern();
+		
 		if (i > s.speed)
 		  {
 		    continue;
@@ -498,9 +581,13 @@ public:
 	      {
 		cur_ship = &new_gs.adv_ships.arr[i-new_gs.my_ships.size];
 	      }
+
+	    //cerr << "tt " <<  cur_ship->id << endl;
+	    //cerr << "col " << collisions.size << endl;
 	    
 	    if (cur_ship->newBowIntersect(new_gs.my_ships,new_gs.adv_ships))
 	      {
+		cerr << "COL " << endl;
 		collisions.push_back(*cur_ship);
 	      }
 	  }
@@ -553,11 +640,11 @@ public:
       }
   }
 
-  void rotate_ships(game_stat& new_gs)
+  void rotate_ships(game_stat& new_gs) const
   {
     // Rotate
     
-    for ( ship &s : my_ships)
+    for ( ship &s : new_gs.my_ships)
       {
 	s.newPosition = s.p;
 	s.newBowCoordinate = s.newBow();
@@ -668,7 +755,7 @@ public:
     //colision with the cannonball
     for(ball &cb:gs.balls)
       {
-	if(!cb.to_remove)
+	if(cb.turn == -1 && !cb.to_remove  )
 	  {
 	    if(cb.p == s.bow() || cb.p == s.stern())
 	      {
@@ -761,12 +848,23 @@ int main()
     {
       gs.update_state();
       gs.print_state();
+
+      game_stat new_gs;
+      fv_actions_t a1;
+
+      action ac;
+      ac.act = FASTER;
+      a1.push_back(ac);
+      
+      gs.simul_next_state(a1,a1, new_gs);
+      new_gs.print_state();
+      
       for (int i = 0; i < gs.get_my_ship_count(); i++) {
 
             // Write an action using cout. DON'T FORGET THE "<< endl"
             // To debug: cerr << "Debug messages..." << endl;
 
-            cout << "MOVE 11 10" << endl; // Any valid action, such as "WAIT" or "MOVE x y"
+            cout << "FASTER" << endl; // Any valid action, such as "WAIT" or "MOVE x y"
         }
     }
 }
