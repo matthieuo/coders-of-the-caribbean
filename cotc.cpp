@@ -429,7 +429,7 @@ public:
 
     apply_action(new_gs);
     move_ships(new_gs);
-    // rotate_ships(new_gs);
+    rotate_ships(new_gs);
 
     //remove 0 ship
     for(ship &s: new_gs.adv_ships)
@@ -568,7 +568,7 @@ public:
 		//cerr << "map " << s.newPosition << s.newBowCoordinate << s.newSternCoordinate << endl;
 	      }
 	  }
-      }
+      
     
 
       
@@ -647,6 +647,7 @@ public:
 	    cur_ship = &new_gs.adv_ships.arr[i-new_gs.my_ships.size];
 	  }
 	checkCollisions(new_gs,*cur_ship);
+      }
       }
   }
 
