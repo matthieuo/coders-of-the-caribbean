@@ -236,8 +236,12 @@ struct ship : public entity
   
   inline bool newBowIntersect(const ship &other) const
   {
-    //cerr << newBowCoordinate << " oth " <<  other.newBowCoordinate << endl;
-    return  (newBowCoordinate == other.newBowCoordinate || newBowCoordinate == other.newPosition || newBowCoordinate == other.newSternCoordinate);
+    
+    bool b =  (newBowCoordinate == other.newBowCoordinate || newBowCoordinate == other.newPosition || newBowCoordinate == other.newSternCoordinate);
+
+    // cerr << newBowCoordinate << " oth " <<  other.newBowCoordinate << " " << b << endl;
+    
+    return b;
   }
 
   inline bool newBowIntersect(const fast_vect<ship,3>& s1,const fast_vect<ship,3>& s2) const
@@ -332,7 +336,7 @@ using fv_mines_t = fast_vect<mine,50>;
 using fv_actions_t = fast_vect<action,3>;
 
 
-using fv_collision_t = fast_vect<ship,30>;
+using fv_collision_t = fast_vect<ship*,30>;
 
 fv_collision_t collisions;
 
@@ -425,7 +429,7 @@ public:
 
     apply_action(new_gs);
     move_ships(new_gs);
-    //rotate_ships(new_gs);
+    // rotate_ships(new_gs);
 
     //remove 0 ship
     for(ship &s: new_gs.adv_ships)
@@ -535,6 +539,7 @@ public:
 	  {
 	    for(ship &s:*all_ships[p])
 	      {
+		//cerr << s.speed << " i " <<i << (i>s.speed) << endl;
 		s.newPosition = s.p;
 		s.newBowCoordinate = s.bow();
 		s.newSternCoordinate = s.stern();
@@ -552,12 +557,15 @@ public:
 		    
 		    s.newBowCoordinate = newCoordinate.neighbor(s.ori);
 		    s.newSternCoordinate = newCoordinate.neighbor((s.ori + 3) % 6);
-	    
+
+		    //cerr << "map " << s.newPosition << s.newBowCoordinate << s.newSternCoordinate << endl;
 		  } else
 		  {
 		    // Stop ship!
+		    //cerr << "out map " << endl;
 		    s.speed = 0;
 		  }
+		//cerr << "map " << s.newPosition << s.newBowCoordinate << s.newSternCoordinate << endl;
 	      }
 	  }
       }
@@ -587,21 +595,23 @@ public:
 	    
 	    if (cur_ship->newBowIntersect(new_gs.my_ships,new_gs.adv_ships))
 	      {
-		cerr << "COL " << endl;
-		collisions.push_back(*cur_ship);
+		//cerr << "COL " << endl;
+		
+		collisions.push_back(cur_ship);
+		//		exit(1);
 	      }
 	  }
 	
 	
-	for (ship &s : collisions)
+	for (ship *s : collisions)
 	  {
 	    // Revert last move
-	    s.newPosition = s.p;
-	    s.newBowCoordinate = s.bow();
-	    s.newSternCoordinate = s.stern();
+	    s->newPosition = s->p;
+	    s->newBowCoordinate = s->bow();
+	    s->newSternCoordinate = s->stern();
 	    
 	    // Stop ships
-	    s.speed = 0;
+	    s->speed = 0;
 	    
 	    collisionDetected = true;
 	  }
@@ -671,25 +681,25 @@ public:
 	    
 	    if (cur_ship->newBowIntersect(new_gs.my_ships,new_gs.adv_ships))
 	      {
-		collisions.push_back(*cur_ship);
+		collisions.push_back(cur_ship);
 	      }
 	  }
 	
 	
-	for (ship &s : collisions)
+	for (ship *s : collisions)
 	  {
 	    // Revert last move
-	    s.newPosition = s.p;
-	    s.newOrientation = s.ori;
-	    s.newBowCoordinate = s.bow();
-	    s.newSternCoordinate = s.stern();
+	    s->newPosition = s->p;
+	    s->newOrientation = s->ori;
+	    s->newBowCoordinate = s->bow();
+	    s->newSternCoordinate = s->stern();
 
   
 		
 
 	    
 	    // Stop ships
-	    s.speed = 0;
+	    s->speed = 0;
 	    
 	    collisionDetected = true;
 	  }
@@ -854,7 +864,8 @@ int main()
 
       action ac;
       ac.act = FASTER;
-      a1.push_back(ac);
+      for (int i = 0; i < gs.get_my_ship_count(); i++)
+	a1.push_back(ac);
       
       gs.simul_next_state(a1,a1, new_gs);
       new_gs.print_state();
