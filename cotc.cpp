@@ -409,7 +409,17 @@ public:
 
     //update cannonball
 
-    for_each(new_gs.balls.begin(),new_gs.balls.end(),[](ball &b){assert(b.turn > -1);if(b.turn == 0) b.to_remove = true;--b.turn;});
+    for_each(new_gs.balls.begin(),new_gs.balls.end(),[](ball &b){
+	if(b.turn == 0)
+	  {
+	    b.to_remove = true;
+	    return;
+	  }
+	if(b.turn > 0)
+	  --b.turn;
+
+	
+      });
 
     
     for(int i=0;i<a_play.size;++i)
@@ -767,7 +777,7 @@ public:
     //colision with the cannonball
     for(ball &cb:gs.balls)
       {
-	if(cb.turn == -1 && !cb.to_remove  )
+	if(cb.turn == 0 && !cb.to_remove  )
 	  {
 	    if(cb.p == s.bow() || cb.p == s.stern())
 	      {
@@ -813,7 +823,7 @@ public:
       {
 	for(mine &m:gs.mines)
 	  {
-	    if((cb.turn == -1 && !m.to_remove && !cb.to_remove) && (m.p == cb.p))
+	    if((cb.turn == 0 && !m.to_remove && !cb.to_remove) && (m.p == cb.p))
 	      {
 		m.to_remove = true;
 		cb.to_remove = true;
@@ -824,7 +834,7 @@ public:
       {
 	for(barrel &b:gs.bars)
 	  {
-	    if((cb.turn == -1 && !b.to_remove && !cb.to_remove) && (b.p == cb.p))
+	    if((cb.turn == 0 && !b.to_remove && !cb.to_remove) && (b.p == cb.p))
 	      {
 		b.to_remove = true;
 		cb.to_remove = true;
@@ -849,7 +859,7 @@ public:
   }
 
   
-private:
+  //private:
 
   
   fv_ships_t my_ships;
@@ -890,14 +900,16 @@ int main()
       gs.print_state();
 
       game_stat new_gs;
-      fv_actions_t a1;
+      fv_actions_t a1,a2;
 
       action ac;
       ac.act = FASTER;
       for (int i = 0; i < gs.get_my_ship_count(); i++)
 	a1.push_back(ac);
+      for (int i = 0; i < gs.adv_ships.size; i++)
+	a2.push_back(ac);
       
-      gs.simul_next_state(a1,a1, new_gs);
+      gs.simul_next_state(a1,a2, new_gs);
       new_gs.print_state();
       
       for (int i = 0; i < gs.get_my_ship_count(); i++) {
