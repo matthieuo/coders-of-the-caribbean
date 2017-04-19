@@ -14,6 +14,14 @@ const int COOLDOWN_CANNON = 2;
 const int COOLDOWN_MINE = 5;
 const int FIRE_DISTANCE_MAX = 10;
 const int MAX_SHIP_SPEED = 2;
+const int MAX_SHIP_HEALTH = 100;
+
+
+const int LOW_DAMAGE = 25;
+const int HIGH_DAMAGE = 50;
+const int MINE_DAMAGE = 25;
+const int NEAR_MINE_DAMAGE = 10;
+
 enum action_e {NONE,MINE,PORT,STARBOARD,FASTER,SLOWER,WAIT,FIRE};
 
 
@@ -92,6 +100,11 @@ struct pos
   pos(int x_,int y_):x(x_),y(y_){}
   int x,y;
 
+
+  inline bool operator==(const pos& rhs) const
+  {
+    return rhs.x == x && rhs.y == y;
+  }
   inline pos neighbor(int orientation) const
   {
     int newY, newX;
@@ -146,6 +159,7 @@ struct entity
   entity(short id_,pos p_):id(id_),p(p_){}
   short id;
   pos p;
+  bool to_remove = false;
 };
 
 struct ship : public entity
@@ -157,6 +171,21 @@ struct ship : public entity
   int cannonCooldown = COOLDOWN_CANNON;
   action perf_action;// = NONE;
 
+  pos newPosition{-1,-1};
+  pos newBowCoordinate{-1,-1};
+  pos newSternCoordinate{-1,-1};
+  int newOrientation = 0;
+
+  inline void damage(int health)
+  {
+    rhum -= health;
+    if (rhum <= 0)
+      {
+	rhum = 0;
+      }
+  }
+
+  
   inline pos stern() const
   {
     return p.neighbor((ori + 3) % 6);
@@ -166,6 +195,55 @@ struct ship : public entity
   {
     return p.neighbor(ori);
   }
+
+  pos newStern() const
+  {
+    return p.neighbor((newOrientation + 3) % 6);
+  }
+
+  pos newBow() const
+  {
+    return p.neighbor(newOrientation);
+  }
+  
+  inline bool newBowIntersect(const ship &other) const
+  {
+    return  (newBowCoordinate == (other.newBowCoordinate) || newBowCoordinate == (other.newPosition) || newBowCoordinate == (other.newSternCoordinate));
+  }
+
+  inline bool newBowIntersect(const fast_vect<ship,3>& s1,const fast_vect<ship,3>& s2) const
+  {
+
+    for(int i=0;i<s1.size + s2.size;++i)
+      {
+	const ship *cur_ship;
+	if(i<s1.size)
+	  {
+	    cur_ship = &s1.arr[i];
+	  }
+	else
+	  {
+	    cur_ship = &s2.arr[i-s2.size];
+	  }
+
+	
+	if (cur_ship->id == id && newBowIntersect(*cur_ship))
+	  {
+	    return true;
+	  }
+      }
+    return false;
+  }
+
+  inline void heal(int health)
+  {
+    rhum += health;
+    if (rhum > MAX_SHIP_HEALTH)
+      {
+      rhum = MAX_SHIP_HEALTH;
+      }
+  }
+  
 };
 
 struct barrel : public entity
@@ -221,6 +299,7 @@ ostream& operator<<(ostream& out, const mine& m)
 }
 
 using fv_ships_t = fast_vect<ship,3>;
+
 using fv_barrels_t = fast_vect<barrel,26>;
 using fv_balls_t = fast_vect<ball,50>;
 using fv_mines_t = fast_vect<mine,50>;
@@ -228,7 +307,10 @@ using fv_mines_t = fast_vect<mine,50>;
 using fv_actions_t = fast_vect<action,3>;
 
 
- 
+using fv_collision_t = fast_vect<ship,30>;
+
+fv_collision_t collisions;
+
 class game_stat
 {
 public:
@@ -237,11 +319,11 @@ public:
     reset_all_vect();
     int myShipCount; // the number of remaining ships
     cin >> myShipCount; cin.ignore();
-
     
-    int entityCount; // the number of entities (e.g. ships, mines or cannonballs)
-    cin >> entityCount; cin.ignore();
-    for (int i = 0; i < entityCount; i++)
+    
+    int entity_count;
+    cin >> entity_count; cin.ignore();
+    for (int i = 0; i < entity_count; i++)
       {
 	int entityId;
 	string entityType;
@@ -287,10 +369,9 @@ public:
 
   void simul_next_state(fv_actions_t a_play, fv_actions_t a_adv, game_stat& new_gs) const
   {
-
     new_gs = *this;
 
-    //update barrels
+    //update ship
     for_each(new_gs.my_ships.begin(),new_gs.my_ships.end(),[](ship &s){s.rhum=max(0,s.rhum - 1);});
     for_each(new_gs.adv_ships.begin(),new_gs.adv_ships.end(),[](ship &s){s.rhum=max(0,s.rhum - 1);});
 
@@ -313,72 +394,319 @@ public:
 	new_gs.adv_ships.arr[i].perf_action = a_adv.arr[i];
       }
     
-
-    function<void(ship&)> fct_action = [&new_gs](ship &s)
+  }
+  
+  void apply_action(game_stat& new_gs)
+  {
+    
+    fv_ships_t *all_ships[2] = {&new_gs.adv_ships,&new_gs.my_ships};
+    
+    for(int p =0;p<2;++p)
       {
-
-
-	switch (s.perf_action.act)
+	for(ship &s:*all_ships[p]) //move all ships (adv and me)
 	  {
-	  case FASTER:
-	    if(s.speed < 2) ++(s.speed);
-	    break;
+	    switch (s.perf_action.act)
+	      {
+	      case FASTER:
+		if(s.speed < 2) ++(s.speed);
+		break;
 	    
-	  case SLOWER:
-	    if(s.speed > 0) --(s.speed);
-	    break;
+	      case SLOWER:
+		if(s.speed > 0) --(s.speed);
+		break;
 	    
-	  case PORT:
-	    s.ori = (s.ori + 1) % 6;
-	    break;
-	    
-	  case STARBOARD:
-	    s.ori = (s.ori + 5) % 6;
-	    break;
-	  case FIRE:
-	  int distance = s.bow().distanceTo(s.perf_action.arg);
-	  if (s.perf_action.arg.isInsideMap() && distance <= FIRE_DISTANCE_MAX && s.cannonCooldown == 0)
-	    {
-	      int travelTime = (int) (1 + round(s.bow().distanceTo(s.perf_action.arg) / 3.0));
-	      //cannonballs.add(new Cannonball(ship.target.x, ship.target.y, ship.id, ship.bow().x, ship.bow().y, travelTime));
-
-	      ball b(0,s.perf_action.arg,0,travelTime);
-	      new_gs.balls.push_back(ball(0,s.perf_action.arg,0,travelTime));
-	      s.cannonCooldown = COOLDOWN_CANNON;
-	    }
+	      case PORT:
+		//s.ori = (s.ori + 1) % 6;
+		s.newOrientation = (s.ori + 1) % 6;
+		break;
+		
+	      case STARBOARD:
+		//s.ori = (s.ori + 5) % 6;
+		s.newOrientation = (s.ori + 5) % 6;
+		break;
+	      case FIRE:
+		{
+		  int distance = s.bow().distanceTo(s.perf_action.arg);
+		  if (s.perf_action.arg.isInsideMap() && distance <= FIRE_DISTANCE_MAX && s.cannonCooldown == 0)
+		    {
+		      int travelTime = (int) (1 + round(s.bow().distanceTo(s.perf_action.arg) / 3.0));
+		      //cannonballs.add(new Cannonball(ship.target.x, ship.target.y, ship.id, ship.bow().x, ship.bow().y, travelTime));
+		      
+		      new_gs.balls.push_back(ball(new_gs.get_new_id(),s.perf_action.arg,0,travelTime));
+		      s.cannonCooldown = COOLDOWN_CANNON;
+		    }
+		}
+		break;
+	      }
 	  }
-      };
+      }
+  }
+
+  
+  //function<void(ship&)> fct_move_ship = [&new_gs](ship &s)
+  void move_ship(game_stat& new_gs)
+  {
+
+    fv_ships_t *all_ships[2] = {&new_gs.adv_ships,&new_gs.my_ships};
 
     
-    function<void(ship&)> fct_move_ship = [&new_gs](ship &s)
+    for (int i = 1; i <= MAX_SHIP_SPEED; i++)
       {
-	for (int i = 1; i <= MAX_SHIP_SPEED; i++)
+	for(int p =0;p<2;++p)
 	  {
-	    if (i > s.speed)
+	    for(ship &s:*all_ships[p])
 	      {
-		continue;
-	      }
-
-	    pos newCoordinate = s.p.neighbor(s.ori);
-	    if (newCoordinate.isInsideMap())
-	      {
-		// Set new coordinate.
-		s.p = newCoordinate;
-		//ship.newBowCoordinate = newCoordinate.neighbor(ship.orientation);
-		//ship.newSternCoordinate = newCoordinate.neighbor((ship.orientation + 3) % 6);
-	      } else
-	      {
-		// Stop ship!
-		s.speed = 0;
+		if (i > s.speed)
+		  {
+		    continue;
+		  }
+	
+		pos newCoordinate = s.p.neighbor(s.ori);
+		if (newCoordinate.isInsideMap())
+		  {
+		    // Set new coordinate.
+		    s.newPosition = newCoordinate;
+		    
+		    s.newBowCoordinate = newCoordinate.neighbor(s.ori);
+		    s.newSternCoordinate = newCoordinate.neighbor((s.ori + 3) % 6);
+	    
+		  } else
+		  {
+		    // Stop ship!
+		    s.speed = 0;
+		  }
 	      }
 	  }
-      };
+      }
+    
+
+      
+    bool collisionDetected = true;
+    while (collisionDetected)
+      {
+	collisionDetected = false;
+	
+	
+	for(int i=0;i<new_gs.my_ships.size + new_gs.adv_ships.size;++i)
+	  {
+	    ship *cur_ship;
+	    if(i<new_gs.my_ships.size)
+	      {
+		cur_ship = &new_gs.my_ships.arr[i];
+	      }
+	    else
+	      {
+		cur_ship = &new_gs.adv_ships.arr[i-new_gs.my_ships.size];
+	      }
+	    
+	    if (cur_ship->newBowIntersect(new_gs.my_ships,new_gs.adv_ships))
+	      {
+		collisions.push_back(*cur_ship);
+	      }
+	  }
+	
+	
+	for (ship &s : collisions)
+	  {
+	    // Revert last move
+	    s.newPosition = s.p;
+	    s.newBowCoordinate = s.bow();
+	    s.newSternCoordinate = s.stern();
+	    
+	    // Stop ships
+	    s.speed = 0;
+	    
+	    collisionDetected = true;
+	  }
+	  collisions.reset();
+      }
+
+    // Move ships to their new location
+    for(int i=0;i<new_gs.my_ships.size + new_gs.adv_ships.size;++i)
+      {
+	ship *cur_ship;
+	if(i<new_gs.my_ships.size)
+	  {
+	    cur_ship = &new_gs.my_ships.arr[i];
+	  }
+	else
+	  {
+	    cur_ship = &new_gs.adv_ships.arr[i-new_gs.my_ships.size];
+	  }
+	
+	cur_ship->p = cur_ship->newPosition;
+      }
+    
+    // Check collisions
+    for(int i=0;i<new_gs.my_ships.size + new_gs.adv_ships.size;++i)
+      {
+	ship *cur_ship;
+	if(i<new_gs.my_ships.size)
+	  {
+	    cur_ship = &new_gs.my_ships.arr[i];
+	  }
+	else
+	  {
+	    cur_ship = &new_gs.adv_ships.arr[i-new_gs.my_ships.size];
+	  }
+	checkCollisions(new_gs,*cur_ship);
+      }
+  }
+
+  void rotate_ships(game_stat& new_gs)
+  {
+    // Rotate
+    
+    for ( ship &s : my_ships)
+      {
+	s.newPosition = s.p;
+	s.newBowCoordinate = s.newBow();
+	s.newSternCoordinate = s.newStern();
+      }
+  
+    bool collisionDetected = true;
+    while (collisionDetected)
+      {
+	collisionDetected = false;
+	
+	
+	for(int i=0;i<new_gs.my_ships.size + new_gs.adv_ships.size;++i)
+	  {
+	    ship *cur_ship;
+	    if(i<new_gs.my_ships.size)
+	      {
+		cur_ship = &new_gs.my_ships.arr[i];
+	      }
+	    else
+	      {
+		cur_ship = &new_gs.adv_ships.arr[i-new_gs.my_ships.size];
+	      }
+	    
+	    if (cur_ship->newBowIntersect(new_gs.my_ships,new_gs.adv_ships))
+	      {
+		collisions.push_back(*cur_ship);
+	      }
+	  }
+	
+	
+	for (ship &s : collisions)
+	  {
+	    // Revert last move
+	    s.newPosition = s.p;
+	    s.newOrientation = s.ori;
+	    s.newBowCoordinate = s.bow();
+	    s.newSternCoordinate = s.stern();
+
+  
+		
+
+	    
+	    // Stop ships
+	    s.speed = 0;
+	    
+	    collisionDetected = true;
+	  }
+	  collisions.reset();
+      }
+
+    // apply rotation
+    for(int i=0;i<new_gs.my_ships.size + new_gs.adv_ships.size;++i)
+      {
+	ship *cur_ship;
+	if(i<new_gs.my_ships.size)
+	  {
+	    cur_ship = &new_gs.my_ships.arr[i];
+	  }
+	else
+	  {
+	    cur_ship = &new_gs.adv_ships.arr[i-new_gs.my_ships.size];
+	  }
+	
+	//cur_ship->p = cur_ship->newPosition;
+	cur_ship->ori = cur_ship->newOrientation;
+      }
+    
+    // Check collisions
+    for(int i=0;i<new_gs.my_ships.size + new_gs.adv_ships.size;++i)
+      {
+	ship *cur_ship;
+	if(i<new_gs.my_ships.size)
+	  {
+	    cur_ship = &new_gs.my_ships.arr[i];
+	  }
+	else
+	  {
+	    cur_ship = &new_gs.adv_ships.arr[i-new_gs.my_ships.size];
+	  }
+	checkCollisions(new_gs,*cur_ship);
+      }
+    
+        
+    }
   
 
 
-    
-  }
 
+
+  void checkCollisions(game_stat &gs,ship &s) const
+  {
+    pos bow = s.bow();
+    pos stern = s.stern();
+    pos center = s.p;
+    
+    // Collision with the barrels
+    for (barrel &b:gs.bars)
+      {
+	
+	if (!b.to_remove && ( b.p == bow || b.p == stern || b.p == center))
+	  {
+	    s.heal(b.level);
+	    b.to_remove = true;
+	  }
+      }
+
+    //colision with the cannonball
+    for(ball &cb:gs.balls)
+      {
+	if(!cb.to_remove)
+	  {
+	    if(cb.p == s.bow() || cb.p == s.stern())
+	      {
+		s.damage(LOW_DAMAGE);
+		cb.to_remove = true;
+	      }
+	    else if(cb.p == s.p)
+	      {
+		s.damage(HIGH_DAMAGE);
+		cb.to_remove = true;
+	      }
+	  }
+      }
+
+    // Collision with the mines
+    for(mine &m:gs.mines)
+      {
+	if(!m.to_remove)
+	  {
+	    if (m.p == s.bow() || m.p == s.stern() || m.p == s.p)
+	      {
+		s.damage(MINE_DAMAGE);
+		m.to_remove = true;
+	      }
+
+
+	    else if (s.stern().distanceTo(m.p) <= 1 || s.bow().distanceTo(m.p) <= 1 || s.p.distanceTo(m.p) <= 1)
+	      {
+		s.damage(NEAR_MINE_DAMAGE);
+		m.to_remove = true;
+	      }
+	  }
+      }
+    
+    }
+
+
+ 
   
   inline int get_my_ship_count() const
   {
@@ -404,6 +732,14 @@ private:
   fv_balls_t balls;
   fv_mines_t mines;
 
+  int orig_id = 0;
+
+  
+  inline int get_new_id()
+  {
+    ++orig_id;
+    return orig_id;
+  }
   void reset_all_vect()
   {
     my_ships.reset();
@@ -434,6 +770,7 @@ int main()
         }
     }
 }
+
 
 
   
