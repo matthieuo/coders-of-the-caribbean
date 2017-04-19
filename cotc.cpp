@@ -118,6 +118,8 @@ struct pos
   pos(int x_,int y_):x(x_),y(y_){}
   int x,y;
 
+   int DIRECTIONS_EVEN[6][2] =  { { 1, 0 }, { 0, -1 }, { -1, -1 }, { -1, 0 }, { -1, 1 }, { 0, 1 } };
+   int DIRECTIONS_ODD[6][2] =  { { 1, 0 }, { 1, -1 }, { 0, -1 }, { -1, 0 }, { 0, 1 }, { 1, 1 } };
 
   inline bool operator==(const pos& rhs) const
   {
@@ -158,9 +160,7 @@ struct pos
     return toCubeCoordinate().distanceTo(dst.toCubeCoordinate());
   }
   
-private:
-  int DIRECTIONS_EVEN[6][2] =  { { 1, 0 }, { 0, -1 }, { -1, -1 }, { -1, 0 }, { -1, 1 }, { 0, 1 } };
-  int DIRECTIONS_ODD[6][2] =  { { 1, 0 }, { 1, -1 }, { 0, -1 }, { -1, 0 }, { 0, 1 }, { 1, 1 } };
+
 
 };
 
@@ -430,7 +430,8 @@ public:
     apply_action(new_gs);
     move_ships(new_gs);
     rotate_ships(new_gs);
-
+    explode_min_bar(new_gs);
+    
     //remove 0 ship
     for(ship &s: new_gs.adv_ships)
       {
@@ -788,22 +789,50 @@ public:
 	  {
 	    if (m.p == s.bow() || m.p == s.stern() || m.p == s.p)
 	      {
+		cerr << s.bow() << s.stern() << s.p << endl;
+		cerr << "** min dam " << m << " " << s << endl;
 		s.damage(MINE_DAMAGE);
 		m.to_remove = true;
 	      }
 
-
+	    /*
 	    else if (s.stern().distanceTo(m.p) <= 1 || s.bow().distanceTo(m.p) <= 1 || s.p.distanceTo(m.p) <= 1)
 	      {
+		cerr << "**  min petit dam " << m << " " << s << endl;
 		s.damage(NEAR_MINE_DAMAGE);
 		m.to_remove = true;
-	      }
+		}*/
 	  }
       }
     
     }
 
-
+  void explode_min_bar(game_stat &gs) const
+  {
+    for(ball &cb:gs.balls)
+      {
+	for(mine &m:gs.mines)
+	  {
+	    if((cb.turn == -1 && !m.to_remove && !cb.to_remove) && (m.p == cb.p))
+	      {
+		m.to_remove = true;
+		cb.to_remove = true;
+	      }
+	  }
+      }
+    for(ball &cb:gs.balls)
+      {
+	for(barrel &b:gs.bars)
+	  {
+	    if((cb.turn == -1 && !b.to_remove && !cb.to_remove) && (b.p == cb.p))
+	      {
+		b.to_remove = true;
+		cb.to_remove = true;
+	      }
+	  }
+      }
+    
+  }
  
   
   inline int get_my_ship_count() const
