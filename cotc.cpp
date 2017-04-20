@@ -24,6 +24,14 @@ const int HIGH_DAMAGE = 50;
 const int MINE_DAMAGE = 25;
 const int NEAR_MINE_DAMAGE = 10;
 const int REWARD_RUM_BARREL_VALUE = 30;
+
+
+const int directions[6][3] { { 1, -1, 0 }, { +1, 0, -1 }, { 0, +1, -1 }, { -1, +1, 0 }, { -1, 0, +1 }, { 0, -1, +1 } };
+const int DIRECTIONS_EVEN[6][2] { { 1, 0 }, { 0, -1 }, { -1, -1 }, { -1, 0 }, { -1, 1 }, { 0, 1 } };
+
+const   int DIRECTIONS_ODD[6][2] =  { { 1, 0 }, { 1, -1 }, { 0, -1 }, { -1, 0 }, { 0, 1 }, { 1, 1 } };
+
+
 enum action_e {NONE,MINE,PORT,STARBOARD,FASTER,SLOWER,WAIT,FIRE};
 
 
@@ -36,6 +44,7 @@ public:
   T arr[N];
   int size = 0;
 
+  //fast_vect(T arr_init[N],int s):arr(arr_init),size(s){}
   inline void reset(){size = 0;}
   inline void push_back(const T& e)
   {
@@ -82,7 +91,7 @@ public:
 class CubeCoordinate
 {
 private:
-  static constexpr int directions[6][3] { { 1, -1, 0 }, { +1, 0, -1 }, { 0, +1, -1 }, { -1, +1, 0 }, { -1, 0, +1 }, { 0, -1, +1 } };
+
   
   int x, y, z;
 public:
@@ -118,8 +127,8 @@ struct pos
   pos(int x_,int y_):x(x_),y(y_){}
   int x,y;
 
-   int DIRECTIONS_EVEN[6][2] =  { { 1, 0 }, { 0, -1 }, { -1, -1 }, { -1, 0 }, { -1, 1 }, { 0, 1 } };
-   int DIRECTIONS_ODD[6][2] =  { { 1, 0 }, { 1, -1 }, { 0, -1 }, { -1, 0 }, { 0, 1 }, { 1, 1 } };
+
+
 
   inline bool operator==(const pos& rhs) const
   {
@@ -160,7 +169,8 @@ struct pos
     return toCubeCoordinate().distanceTo(dst.toCubeCoordinate());
   }
   
-
+  //private:
+  
 
 };
 
@@ -170,12 +180,58 @@ ostream& operator<<(ostream& out, const pos& p)
     return out;
 }
 
+const action_e avail_act[5] =  {PORT,STARBOARD,FASTER,SLOWER,WAIT};
+
 struct action
 {
-  action_e act = NONE;
-  pos arg{0,0};
+  action():act(NONE),arg({0,0}){}
+  action(bool):arg({0,0}) //random init
+  {
+    init_random();
+  }
+  
+  action_e act;
+  pos arg;
+
+  void init_random()
+  {
+    // random_shuffle(action_e.begin(), action_e.end());
+
+    int ran = rand()%5;
+    act = avail_act[ran];
+  }
+
+ 
+
 };
 
+
+ostream& operator<<(ostream& out, const action& a)
+{
+
+  switch(a.act)
+    {
+    case WAIT:
+      out << "WAIT";
+      break;
+    case FASTER:
+      out << "FASTER";
+      break;
+    case SLOWER:
+      out << "SLOWER";
+      break;
+    case PORT:
+      out << "PORT";
+      break;
+    case STARBOARD:
+      out << "STARBOARD";
+      break;
+    case FIRE:
+      out << "FIRE " << a.arg.x << " " << a.arg.y;
+      break;
+    }
+    return out;
+}
 
 struct entity
 {
@@ -233,13 +289,46 @@ struct ship : public entity
   {
     return p.neighbor(newOrientation);
   }
+
+  inline bool newPositionsIntersect(const ship &other) const
+  {
+    bool sternCollision =  newSternCoordinate == other.newBowCoordinate || newSternCoordinate == other.newPosition || newSternCoordinate == other.newSternCoordinate;
+    
+    bool centerCollision = newPosition == other.newBowCoordinate || newPosition == other.newPosition || newPosition == other.newSternCoordinate;
+    return newBowIntersect(other) || sternCollision || centerCollision;
+  }
+
+  inline bool newPositionsIntersect(const fast_vect<ship,3>& s1,const fast_vect<ship,3>& s2) const
+  {
+
+    for(int i=0;i<s1.size + s2.size;++i)
+      {
+	const ship *cur_ship;
+	if(i<s1.size)
+	  {
+	    cur_ship = &s1.arr[i];
+	  }
+	else
+	  {
+	    cur_ship = &s2.arr[i-s1.size];
+	  }
+
+	
+	if (cur_ship->id != id && newPositionsIntersect(*cur_ship))
+	  {
+	    return true;
+	  }
+      }
+    return false;
+  }
+   
   
   inline bool newBowIntersect(const ship &other) const
   {
     
     bool b =  (newBowCoordinate == other.newBowCoordinate || newBowCoordinate == other.newPosition || newBowCoordinate == other.newSternCoordinate);
 
-    // cerr << newBowCoordinate << " oth " <<  other.newBowCoordinate << " " << b << endl;
+    //cerr << newBowCoordinate << " oth " <<  other.newBowCoordinate << " " << b << endl;
     
     return b;
   }
@@ -399,10 +488,12 @@ public:
   }
 
 
-  void simul_next_state(fv_actions_t a_play, fv_actions_t a_adv, game_stat& new_gs) const
+  int simul_next_state(fv_actions_t a_play, fv_actions_t a_adv, game_stat& new_gs) const
   {
     new_gs = *this;
 
+
+    
     //update ship
     for_each(new_gs.my_ships.begin(),new_gs.my_ships.end(),[](ship &s){s.rhum=max(0,s.rhum - 1);});
     for_each(new_gs.adv_ships.begin(),new_gs.adv_ships.end(),[](ship &s){s.rhum=max(0,s.rhum - 1);});
@@ -470,7 +561,12 @@ public:
     new_gs.bars.remove_to_rem();
     new_gs.balls.remove_to_rem();
     new_gs.mines.remove_to_rem();
-    
+
+    if(new_gs.my_ships.size == 0)
+      return 0; //adv win
+    else if(new_gs.adv_ships.size == 0)
+      return 1; //I win
+    else return 2; //no win now
   }
   
   void apply_action(game_stat& new_gs) const
@@ -665,12 +761,15 @@ public:
   void rotate_ships(game_stat& new_gs) const
   {
     // Rotate
-    
-    for ( ship &s : new_gs.my_ships)
+    fv_ships_t *all_ships[2] = {&new_gs.adv_ships,&new_gs.my_ships};
+    for(int p=0;p<2;++p)
       {
-	s.newPosition = s.p;
-	s.newBowCoordinate = s.newBow();
-	s.newSternCoordinate = s.newStern();
+	for ( ship &s : *all_ships[p])
+	  {
+	    s.newPosition = s.p;
+	    s.newBowCoordinate = s.newBow();
+	    s.newSternCoordinate = s.newStern();
+	  }
       }
   
     bool collisionDetected = true;
@@ -690,16 +789,20 @@ public:
 	      {
 		cur_ship = &new_gs.adv_ships.arr[i-new_gs.my_ships.size];
 	      }
-	    
-	    if (cur_ship->newBowIntersect(new_gs.my_ships,new_gs.adv_ships))
+
+	    cerr << *cur_ship << " " << cur_ship->newOrientation << endl;
+	    if (cur_ship->newPositionsIntersect(new_gs.my_ships,new_gs.adv_ships))
 	      {
+		
 		collisions.push_back(cur_ship);
+		//exit(1);
 	      }
 	  }
 	
-	
+	//cerr << "size col " << collisions.size << endl;
 	for (ship *s : collisions)
 	  {
+	    //cerr << "col val " << *s << endl;
 	    // Revert last move
 	    s->newPosition = s->p;
 	    s->newOrientation = s->ori;
@@ -799,8 +902,8 @@ public:
 	  {
 	    if (m.p == s.bow() || m.p == s.stern() || m.p == s.p)
 	      {
-		cerr << s.bow() << s.stern() << s.p << endl;
-		cerr << "** min dam " << m << " " << s << endl;
+		//cerr << s.bow() << s.stern() << s.p << endl;
+		//cerr << "** min dam " << m << " " << s << endl;
 		s.damage(MINE_DAMAGE);
 		m.to_remove = true;
 	      }
@@ -890,8 +993,38 @@ public:
  * Auto-generated code below aims at helping you parse
  * the standard input according to the problem statement.
  **/
+
+void bench(const game_stat &gs)
+{
+
+
+  game_stat curr_gs = gs;
+
+  for(int t=0;t<1000;++t)
+    {
+      game_stat new_gs;
+
+      fv_actions_t a1,a2;
+      
+      for (int i = 0; i < curr_gs.my_ships.size; i++)
+	a1.push_back(action(true));
+      for (int i = 0; i < curr_gs.adv_ships.size; i++)
+	a2.push_back(action(true));
+      
+      if(curr_gs.simul_next_state(a1,a2, new_gs) != 2)
+	{
+	  cerr << "VICTO " << endl;
+	  return;
+	}
+
+      //new_gs.print_state();
+      curr_gs = new_gs;
+    }
+}
+
 int main()
 {
+  srand(time(NULL));
   game_stat gs;
     // game loop
   while (1)
@@ -899,25 +1032,29 @@ int main()
       gs.update_state();
       gs.print_state();
 
+      cerr << " BENCH " << endl;
+
+      bench(gs);
+      cerr << "END  BENCH " << endl;
+      
       game_stat new_gs;
       fv_actions_t a1,a2;
-
-      action ac;
-      ac.act = FASTER;
-      for (int i = 0; i < gs.get_my_ship_count(); i++)
-	a1.push_back(ac);
+      
+   
+      for (int i = 0; i < gs.my_ships.size; i++)
+	a1.push_back(action(true));
       for (int i = 0; i < gs.adv_ships.size; i++)
-	a2.push_back(ac);
+	a2.push_back(action(true));
       
       gs.simul_next_state(a1,a2, new_gs);
       new_gs.print_state();
       
-      for (int i = 0; i < gs.get_my_ship_count(); i++) {
+      for (action &a:a1) {
 
             // Write an action using cout. DON'T FORGET THE "<< endl"
             // To debug: cerr << "Debug messages..." << endl;
 
-            cout << "FASTER" << endl; // Any valid action, such as "WAIT" or "MOVE x y"
+            cout << a << endl; // Any valid action, such as "WAIT" or "MOVE x y"
         }
     }
 }
