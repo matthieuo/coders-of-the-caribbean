@@ -15,6 +15,7 @@
 #include <cfloat>
 #include <memory>
 
+#pragma GCC optimize (3)
 
 using namespace std;
 const int MAP_WIDTH = 23;
@@ -42,7 +43,9 @@ const   int DIRECTIONS_ODD[6][2] =  { { 1, 0 }, { 1, -1 }, { 0, -1 }, { -1, 0 },
 
 enum action_e {NONE,MINE,PORT,STARBOARD,FASTER,SLOWER,WAIT,FIRE};
 
-
+class pos;
+pos * precomp_nei[23][21][6];
+bool nei_precomputed = false;
 
 template<typename T,int N>
 class fast_vect
@@ -116,7 +119,7 @@ public:
     return pos(newX, newY);
     }*/
 
-  CubeCoordinate neighbor(int orientation) const __attribute__((always_inline))
+  CubeCoordinate neighbor(int orientation) const 
   {
     int nx = x + directions[orientation][0];
     int ny = y + directions[orientation][1];
@@ -135,7 +138,8 @@ public:
 
 struct pos
 {
-  pos(int x_,int y_)__attribute__((always_inline)):x(x_),y(y_){}
+  pos():x(0),y(0){}
+  pos(int x_,int y_):x(x_),y(y_){}
   int x,y;
 
 
@@ -145,8 +149,11 @@ struct pos
   {
     return rhs.x == x && rhs.y == y;
   }
-  inline pos neighbor(int orientation) const __attribute__((always_inline))
+  inline pos neighbor(int orientation) const 
   {
+    if(nei_precomputed)
+      return *precomp_nei[x][y][orientation];
+    
     int newY, newX;
     if (y % 2 == 1)
       {
@@ -162,12 +169,12 @@ struct pos
     return  pos(newX, newY);
   }
 
-  inline bool isInsideMap() const __attribute__((always_inline))
+  inline bool isInsideMap() const 
   {
     return x >= 0 && x < MAP_WIDTH && y >= 0 && y < MAP_HEIGHT;
   }
   
-  CubeCoordinate toCubeCoordinate() const __attribute__((always_inline))
+  CubeCoordinate toCubeCoordinate() const 
   {
     int xp = x - (y - (y & 1)) / 2;
     int zp = y;
@@ -194,7 +201,7 @@ const int NUM_ACTIONS = 5;
 
 
 using avail_act_t =  action_e[NUM_ACTIONS];
-const avail_act_t avail_act =  {PORT,STARBOARD,FASTER,SLOWER,WAIT};
+const avail_act_t avail_act =  {PORT,STARBOARD,FASTER,SLOWER,FIRE};
 
 struct action
 {
@@ -207,7 +214,7 @@ struct action
   action_e act;
   pos arg;
 
-  inline bool operator==(const action& a) const
+  inline bool operator==(const action& a)  const __attribute__((always_inline))
   {
     return act == a.act && arg == a.arg;
   }
@@ -217,6 +224,7 @@ struct action
 
     int ran = rand()%NUM_ACTIONS;
     act = avail_act[ran];
+
   }
 
  
@@ -288,7 +296,7 @@ struct ship : public entity
   }
 
   
-  inline pos stern() const __attribute__((always_inline))
+  inline pos stern() const 
   {
     return p.neighbor((ori + 3) % 6);
   }
@@ -298,12 +306,12 @@ struct ship : public entity
     return p.neighbor(ori);
   }
 
-  pos newStern() const __attribute__((always_inline))
+  inline pos newStern() const __attribute__((always_inline))
   {
     return p.neighbor((newOrientation + 3) % 6);
   }
 
-  pos newBow() const __attribute__((always_inline))
+  inline pos newBow() const __attribute__((always_inline)) 
   {
     return p.neighbor(newOrientation);
   }
@@ -341,7 +349,7 @@ struct ship : public entity
   }
    
   
-  inline bool newBowIntersect(const ship &other) const
+  inline bool newBowIntersect(const ship &other) const __attribute__((always_inline))
   {
     
     bool b =  (newBowCoordinate == other.newBowCoordinate || newBowCoordinate == other.newPosition || newBowCoordinate == other.newSternCoordinate);
@@ -994,7 +1002,27 @@ public:
   {
     a.reset();
     for (int i = 0; i < my_ships.size; i++)
-      a.push_back(action(true));
+      {
+	action ac = action(true);
+
+	if(ac.act == FIRE)
+	  {
+	    //choose some fire options
+	    int dist = 10000;
+	    pos ptmp{0,0};
+	    for(const ship &s:adv_ships)
+	      {
+		int d = s.p.distanceTo(my_ships.arr[i].p);
+		if(d < dist)
+		  {
+		    dist = d;
+		    ptmp = s.p;
+		  }
+	      }
+	    ac.arg = ptmp;
+	  }
+	a.push_back(ac);
+      }
   }
 
 
@@ -1197,7 +1225,7 @@ namespace msa {
             int get_num_visits() const { return num_visits; }
 
             // accumulated value (wins)
-            float get_value() const { return value; }
+            float get_value() const __attribute__((always_inline)) { return value; }
 
             // how deep the TreeNode is in the tree
             int get_depth() const { return depth; }
@@ -1533,7 +1561,9 @@ namespace msa {
 
                 // we shouldn't be here
 		fv_actions_t aa;
+		
 		current_state.create_random_action(aa);
+		cerr << " HE UUUU " << endl;
                 return aa;
             }
 
@@ -1547,6 +1577,22 @@ int main()
   srand(time(NULL));
   game_stat gs;
     // game loop
+
+  //precompute
+ 
+  
+  for(int x =0;x<23;++x)
+    for(int y=0;y<21;++y)
+      for(int o=0;o<6;++o)
+	{
+	  pos tmp(x,y);
+	  pos *tm = new pos(0,0);
+	  *tm = tmp.neighbor(o);
+	  precomp_nei[x][y][o] = tm; 
+	}
+  
+  nei_precomputed = true;
+  
   while (1)
     {
       //      msa::LoopTimer::test(500);
@@ -1556,7 +1602,7 @@ int main()
 
       msa::mcts::UCT uct;
       uct.uct_k = sqrt(2);
-      uct.max_millis = 40;
+      uct.max_millis = 4000;
       uct.max_iterations = 000;
       uct.simulation_depth = 5;
       
@@ -1564,8 +1610,8 @@ int main()
       fv_actions_t a_mcts = uct.run(gs);
 
       //cerr << ac << endl;
-      cerr << "END  UCT " << endl;
-      
+      cerr << "END  UCT " << uct.get_iterations() << endl;
+      return 1;
       //cerr << " BENCH " << endl;
 
       //bench(gs);
