@@ -993,6 +993,12 @@ public:
     for (int i = 0; i < my_ships.size; i++)
       a.push_back(action(true));
   }
+
+
+  float evaluate() const
+  {
+    return 0;
+  }
   
   inline int get_my_ship_count() const
   {
@@ -1147,8 +1153,8 @@ namespace msa {
 	  }
 
             //--------------------------------------------------------------
-            void update(const std::vector<float>& rewards) {
-                this->value += rewards[agent_id];
+            void update(float rewards) {
+                this->value += rewards;
                 num_visits++;
             }
 
@@ -1344,7 +1350,7 @@ namespace msa {
 
 		// State must comply with State Interface (see IState.h)
 		// Action can be anything (which your State class knows how to handle)
-        template <class State, typename Action>
+      //template <class State, typename Action>
         class UCT {
             typedef TreeNodeT TreeNode;
 
@@ -1425,7 +1431,7 @@ namespace msa {
 
 
             //--------------------------------------------------------------
-            Action run(const State& current_state, unsigned int seed = 1, vector<State>* explored_states = nullptr) {
+            fv_actions_t run(const game_stat& current_state, unsigned int seed = 1, vector<game_stat>* explored_states = nullptr) {
                 // initialize timer
                 timer.init();
 
@@ -1450,23 +1456,28 @@ namespace msa {
                     // 2. EXPAND by adding a single child (if not terminal or not fully expanded)
                     if(!node->is_fully_expanded() && !node->is_terminal()) node = node->expand();
                     
-                    State state(node->get_state());
+		    //                    game_stat state(node->get_state());
+		    game_stat state;
 
                     // 3. SIMULATE (if not terminal)
                     if(!node->is_terminal()) {
-                        Action action;
-                        for(int t = 0; t < simulation_depth; t++) {
+                        fv_actions_t action;
+                        for(unsigned int t = 0; t < simulation_depth; t++) {
                             if(state.is_terminal()) break;
 
-                            if(state.get_random_action(action))
-                                state.apply_action(action);
-                            else
-                                break;
+                            //if(state.create_random_action(action))
+			    //{
+			    state.create_random_action(action);
+			    node->get_state().apply_action_mcts(action,state);
+                                //state.apply_action(action);
+				// }
+			      //else
+			      // break;
                         }
                     }
 
                     // get rewards vector for all agents
-                    const std::vector<float> rewards = state.evaluate();
+                    float rewards = state.evaluate();
 
                     // add to history
                     if(explored_states) explored_states->push_back(state);
@@ -1495,7 +1506,9 @@ namespace msa {
                 if(best_node) return best_node->get_action();
 
                 // we shouldn't be here
-                return Action();
+		fv_actions_t aa;
+		current_state.create_random_action(aa);
+                return aa;
             }
 
 
