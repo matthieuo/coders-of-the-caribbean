@@ -78,6 +78,9 @@ public:
     return &arr[size];
   }
 
+  const T* begin() const {return &arr[0];}
+  const T* end() const {return &arr[size];}
+  
   void remove_to_rem()
   {
     T arr_tmp[N];
@@ -997,7 +1000,22 @@ public:
 
   float evaluate() const
   {
-    return 0;
+    float my_sh  = my_ships.size;
+    float adv_sh = adv_ships.size;
+
+    float my_rhum = 0;
+    float adv_rhum = 0;
+
+    for(const ship &s:my_ships)
+      my_rhum += s.rhum;
+
+    for(const ship &s:adv_ships)
+      adv_rhum += s.rhum;
+
+
+    
+    
+    return my_sh - adv_sh + my_rhum - adv_rhum;
   }
   
   inline int get_my_ship_count() const
