@@ -1120,12 +1120,14 @@ namespace msa {
 
 		fv_actions_t a;
 		state.create_random_action(a);
-		
-		while(!is_action_exist_child(a))
+
+		//cerr << " expand " << endl;
+		while(is_action_exist_child(a))
 		  {
 		    state.create_random_action(a);
 		  }
 
+		//cerr << " en expand " << endl;
 		//check if the action exists on a child
 
 		
@@ -1444,15 +1446,19 @@ namespace msa {
                 iterations = 0;
                 while(true) {
                     // indicate start of loop
+		  // cerr << " it " << iterations <<  endl;
                     timer.loop_start();
 
                     // 1. SELECT. Start at root, dig down into tree using UCT on all fully expanded nodes
                     TreeNode* node = &root_node;
-                    while(!node->is_terminal() && node->is_fully_expanded()) {
+                    while(!node->is_terminal() && node->is_fully_expanded())
+		      {
+			//cerr << " while " << endl;
                         node = get_best_uct_child(node, uct_k);
 //						assert(node);	// sanity check
-                    }
+		      }
 
+		    //cerr << " ap while " << endl;
                     // 2. EXPAND by adding a single child (if not terminal or not fully expanded)
                     if(!node->is_fully_expanded() && !node->is_terminal()) node = node->expand();
                     
@@ -1462,7 +1468,9 @@ namespace msa {
                     // 3. SIMULATE (if not terminal)
                     if(!node->is_terminal()) {
                         fv_actions_t action;
-                        for(unsigned int t = 0; t < simulation_depth; t++) {
+                        for(unsigned int t = 0; t < simulation_depth; t++)
+			  {
+			    //cerr << " simu " << endl;
                             if(state.is_terminal()) break;
 
                             //if(state.create_random_action(action))
@@ -1528,25 +1536,24 @@ int main()
       gs.update_state();
       gs.print_state();
 
-      cerr << " BENCH " << endl;
+      msa::mcts::UCT uct;
+      uct.uct_k = sqrt(2);
+      uct.max_millis = 40;
+      uct.max_iterations = 000;
+      uct.simulation_depth = 5;
+      
+      cerr << " UCT " << endl;
+      fv_actions_t a_mcts = uct.run(gs);
 
-      bench(gs);
-      cerr << "END  BENCH " << endl;
+      //cerr << ac << endl;
+      cerr << "END  UCT " << endl;
+      
+      //cerr << " BENCH " << endl;
 
-      return 1;
-      game_stat new_gs;
-      fv_actions_t a1,a2;
-      
-   
-      for (int i = 0; i < gs.my_ships.size; i++)
-	a1.push_back(action(true));
-      for (int i = 0; i < gs.adv_ships.size; i++)
-	a2.push_back(action(true));
-      
-      gs.simul_next_state(a1,a2, new_gs);
-      new_gs.print_state();
-      
-      for (action &a:a1) {
+      //bench(gs);
+      //cerr << "END  BENCH " << endl;
+
+      for (action &a:a_mcts) {
 
             // Write an action using cout. DON'T FORGET THE "<< endl"
             // To debug: cerr << "Debug messages..." << endl;
