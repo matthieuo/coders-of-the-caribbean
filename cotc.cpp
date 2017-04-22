@@ -1,3 +1,9 @@
+#pragma GCC optimize("-O3")
+#pragma GCC optimize("inline")
+#pragma GCC optimize("omit-frame-pointer")
+#pragma GCC optimize("unroll-loops")
+
+
 #include <iostream>
 #include <string>
 #include <vector>
@@ -52,6 +58,12 @@ class fast_vect
 {
 public:
 
+  /* fast_vect(const fast_vect& fv)
+  {
+    memcpy(arr,fv.arr,fv.size*sizeof(T));
+    size = fv.size;
+    }
+    fast_vect &operator=(const fast_vect& f){}*/
   T arr[N];
   int size = 0;
 
@@ -255,6 +267,9 @@ ostream& operator<<(ostream& out, const action& a)
     case FIRE:
       out << "FIRE " << a.arg.x << " " << a.arg.y;
       break;
+    default:
+      out << "OTH ";
+      break;
     }
     return out;
 }
@@ -449,6 +464,7 @@ using fv_balls_t = fast_vect<ball,50>;
 using fv_mines_t = fast_vect<mine,50>;
 
 using fv_actions_t = fast_vect<action,3>;
+using fv_all_actions_t = fast_vect<fv_actions_t,5*5*5>;
 
 bool operator==(const fv_actions_t&a1,const fv_actions_t&a2)
 {
@@ -661,6 +677,7 @@ public:
 		}
 		break;
 	      default:
+		cerr << s.perf_action << endl;
 		assert(false);
 	      
 	      }
@@ -998,16 +1015,19 @@ public:
     simul_next_state(my_a,adv,gs);
   }
 
-  void create_random_action(fv_actions_t &a) const
+
+  void init_action_random()
   {
-    a.reset();
+
     for (int i = 0; i < my_ships.size; i++)
       {
-	action ac = action(true);
-
-	if(ac.act == FIRE)
+	act[i][0].act = SLOWER;
+	act[i][1].act = WAIT;
+	
+	if(my_ships.arr[i].cannonCooldown == 0)
 	  {
-	    //choose some fire options
+	    //we can fire
+	    //choose a fire option for adv
 	    int dist = 10000;
 	    pos ptmp{0,0};
 	    for(const ship &s:adv_ships)
@@ -1019,14 +1039,112 @@ public:
 		    ptmp = s.p;
 		  }
 	      }
-	    ac.arg = ptmp;
+	    act[i][0].arg = ptmp;
+	    act[i][0].act = FIRE;
+	    
+	    dist = 10000;
+	    //mine option
+	    for(const mine &s:mines)
+	      {
+		int d = s.p.distanceTo(my_ships.arr[i].p);
+		if(d < dist)
+		  {
+		    dist = d;
+		    ptmp = s.p;
+		  }
+	      }
+	    act[i][1].arg = ptmp;
+	    act[i][1].act = FIRE;
 	  }
-	a.push_back(ac);
+
+
+	act[i][2].act = PORT;
+	act[i][3].act = STARBOARD;
+	act[i][4].act = FASTER;
+
       }
+
+    is_act_computed = true;
+    
   }
 
 
-  float evaluate() const
+  void get_one_random_action(fv_actions_t &ret_val)
+  {
+    if(!is_act_computed) init_action_random();
+
+    //cerr << "tt " << endl;
+    ret_val.reset();
+    for(int i=0;i<my_ships.size;++i)
+      {
+	int ran =  rand() % 5;
+	ret_val.push_back(act[i][ran]);
+
+      }
+   
+
+  }
+  void create_random_action_list(fv_all_actions_t &ret_value)
+  {
+    ret_value.reset();
+
+    if(!is_act_computed) init_action_random();
+    //cerr << " yoyo " << my_ships.size << endl;
+    switch(my_ships.size)
+      {
+      case 1:
+	for(int i=0;i<5;++i)
+	  {
+	    fv_actions_t t;
+	    t.push_back(act[0][i]);
+	    ret_value.push_back(t); //faire pour le reste
+	  }
+	break;
+      case 2:
+	//cerr << " case 2 " << endl;
+	for(int i=0;i<5;++i)
+	  {
+	    fv_actions_t t;
+	    t.push_back(act[0][i]);
+	    cerr << act[0][i] <<endl;
+	    for(int j=0;j<5;++j)
+	      {
+		t.push_back(act[1][j]);
+		cerr << act[1][i] <<endl;
+		cerr << "********" << endl;
+		ret_value.push_back(t); //faire pour le reste
+		t.size--;
+	      }
+	  }
+	break;
+      case 3:
+	for(int i=0;i<5;++i)
+	  {
+	    fv_actions_t t;
+	    t.push_back(act[0][i]);
+
+	    //cerr << act[0][i] << endl;
+	    for(int j=0;j<5;++j)
+	      {
+		//cerr << act[1][j] << endl;
+		t.push_back(act[1][j]);
+		for(int k=0;k<5;++k)
+		  {
+		    t.push_back(act[2][k]);
+		    //cerr << act[2][i] << endl;
+		    ret_value.push_back(t); //faire pour le reste
+		    t.size--;
+		  }
+		t.size--;
+	      }
+	  }
+	break;
+      }
+
+  }
+
+
+  inline float evaluate() const
   {
     float my_sh  = my_ships.size;
     float adv_sh = adv_ships.size;
@@ -1066,7 +1184,8 @@ public:
   }
     
   //private:
-
+  action act[3][5];
+  bool is_act_computed = false;
   
   fv_ships_t my_ships;
 
@@ -1133,7 +1252,8 @@ namespace msa {
 
 
         class TreeNodeT {
-            typedef std::shared_ptr< TreeNodeT > Ptr;
+	  //typedef std::shared_ptr< TreeNodeT > Ptr;
+	  typedef  TreeNodeT*  Ptr;
 
         public:
             //--------------------------------------------------------------
@@ -1164,14 +1284,16 @@ namespace msa {
 
 		
 
-		fv_actions_t a;
-		state.create_random_action(a);
-
+		if(all_actions.size == 0)
+		  {
+		    state.create_random_action_list(all_actions);
+		    random_shuffle(all_actions.begin(), all_actions.end());
+		  }
 		//cerr << " expand " << endl;
-		while(is_action_exist_child(a))
+		/*while(is_action_exist_child(a))
 		  {
 		    state.create_random_action(a);
-		  }
+		    }*/
 
 		//cerr << " en expand " << endl;
 		//check if the action exists on a child
@@ -1182,7 +1304,7 @@ namespace msa {
 		  //}
 
                 // add the next action in queue as a child
-                return add_child_with_action(a); //????????
+                return add_child_with_action(all_actions.arr[children.size()]); //????????
             }
 
 	  
@@ -1234,7 +1356,8 @@ namespace msa {
             int get_num_children() const { return children.size(); }
 
             // get the i'th child
-            TreeNodeT* get_child(int i) const { return children[i].get(); }
+            //TreeNodeT* get_child(int i) const { return children[i].get(); }
+	  TreeNodeT* get_child(int i) const { return children[i]; }
 
             // get parent
             TreeNodeT* get_parent() const { return parent; }
@@ -1254,7 +1377,7 @@ namespace msa {
             std::vector< Ptr > children;	// all current children
 
 
-	  
+	  fv_all_actions_t all_actions; //possible actions
 	  //std::vector< Action > actions;			// possible actions from this state
 
 
@@ -1521,7 +1644,8 @@ namespace msa {
 
                             //if(state.create_random_action(action))
 			    //{
-			    state.create_random_action(action);
+			    //state.create_random_action(action);
+			    state.get_one_random_action(action);
 			    node->get_state().apply_action_mcts(action,state);
                                 //state.apply_action(action);
 				// }
@@ -1562,7 +1686,7 @@ namespace msa {
                 // we shouldn't be here
 		fv_actions_t aa;
 		
-		current_state.create_random_action(aa);
+		//current_state.get_one_random_action(aa);
 		cerr << " HE UUUU " << endl;
                 return aa;
             }
@@ -1602,16 +1726,16 @@ int main()
 
       msa::mcts::UCT uct;
       uct.uct_k = sqrt(2);
-      uct.max_millis = 4000;
+      uct.max_millis = 50;
       uct.max_iterations = 000;
-      uct.simulation_depth = 5;
+      uct.simulation_depth = 50;
       
       cerr << " UCT " << endl;
       fv_actions_t a_mcts = uct.run(gs);
 
       //cerr << ac << endl;
       cerr << "END  UCT " << uct.get_iterations() << endl;
-      return 1;
+      //      return 1;
       //cerr << " BENCH " << endl;
 
       //bench(gs);
