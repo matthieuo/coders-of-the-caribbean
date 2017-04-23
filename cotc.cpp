@@ -972,13 +972,6 @@ public:
 		m.to_remove = true;
 	      }
 
-	    /*
-	      else if (s.stern().distanceTo(m.p) <= 1 || s.bow().distanceTo(m.p) <= 1 || s.p.distanceTo(m.p) <= 1)
-	      {
-	      cerr << "**  min petit dam " << m << " " << s << endl;
-	      s.damage(NEAR_MINE_DAMAGE);
-	      m.to_remove = true;
-	      }*/
 	  }
       }
     
@@ -992,6 +985,21 @@ public:
 	  {
 	    if((cb.turn == 0 && !m.to_remove && !cb.to_remove) && (m.p == cb.p))
 	      {
+		//check si near mine damage
+		for(ship &s:gs.my_ships)
+		  {
+		    if(s.stern().distanceTo(m.p) <= 1 || s.bow().distanceTo(m.p) <= 1 || s.p.distanceTo(m.p) <= 1)
+		      {
+			s.damage(NEAR_MINE_DAMAGE);
+		      }
+		  }
+		for(ship &s:gs.adv_ships)
+		  {
+		    if(s.stern().distanceTo(m.p) <= 1 || s.bow().distanceTo(m.p) <= 1 || s.p.distanceTo(m.p) <= 1)
+		      {
+			s.damage(NEAR_MINE_DAMAGE);
+		      }
+		  }
 		m.to_remove = true;
 		cb.to_remove = true;
 	      }
@@ -1234,19 +1242,24 @@ public:
     float adv_rhum = 0;
 
     float speed = 0;
+
+    float center_dist = 0;
     for(const ship &s:my_ships)
       {
 	my_rhum += s.rhum;
 	speed += s.speed;
+
+	center_dist += s.p.distanceTo({12,10});
       }
 
     for(const ship &s:adv_ships)
       adv_rhum += s.rhum;
 
 
+    //be at the center
     
     
-    float eval = speed + my_sh - adv_sh + my_rhum - adv_rhum;
+    float eval = 0.5*speed - 0.5*center_dist + 20*(0.9*my_sh - adv_sh) + 10*(0.9*my_rhum - adv_rhum);
 
     //cerr << eval << endl;
     return eval;
@@ -1745,7 +1758,7 @@ public:
 
 	// get rewards vector for all agents
 	float rewards = state_simul.evaluate();
-
+	rewards = rewards*powf(0.8,node->get_depth());
     
 	// 4. BACK PROPAGATION
 	while(node)
