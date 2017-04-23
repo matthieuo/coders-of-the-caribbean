@@ -1266,7 +1266,7 @@ public:
   }
 
 
-  bool is_terminal() const
+  inline bool is_terminal() const
   {
     return my_ships.size == 0 || adv_ships.size == 0;
   }
@@ -1341,7 +1341,7 @@ void bench(const game_stat &gs)
 
 
 class TreeNodeT {
-  //typedef std::shared_ptr< TreeNodeT > Ptr;
+
   typedef  TreeNodeT*  Ptr;
 
 public:
@@ -1378,22 +1378,12 @@ public:
 	state.create_random_action_list(all_actions);
 	random_shuffle(all_actions.begin(), all_actions.end());
       }
-    //cerr << " expand " << endl;
-    /*while(is_action_exist_child(a))
-      {
-      state.create_random_action(a);
-      }*/
-
+   
     //cerr << " en expand " << endl;
     //check if the action exists on a child
 
 		
-    // randomize the order
-    //std::random_shuffle(actions.begin(), actions.end());
-    //}
-
-    // add the next action in queue as a child
-    //		cerr << all_actions.size << " " << endl;//all_actions.arr[children.size()] << endl;
+   
     return add_child_with_action(all_actions.arr[children.size()]); //????????
   }
 
@@ -1420,8 +1410,6 @@ public:
   }
 
 
-  //--------------------------------------------------------------
-  // GETTERS
   // state of the TreeNode
   const game_stat& get_state() const { return state; }
 
@@ -1429,10 +1417,10 @@ public:
   const fv_actions_t& get_action() const { return act; }
 
   // all children have been expanded and simulated
-  bool is_fully_expanded() const { return children.empty() == false && (int)children.size() == all_actions.size; }
+  inline bool is_fully_expanded() const { return children.empty() == false && (int)children.size() == all_actions.size; }
 
   // does this TreeNode end the search (i.e. the game)
-  bool is_terminal() const { return state.is_terminal(); }
+  inline bool is_terminal() const { return state.is_terminal(); }
 
   // number of times the TreeNode has been visited
   int get_num_visits() const { return num_visits; }
@@ -1446,11 +1434,9 @@ public:
   // number of children the TreeNode has
   int get_num_children() const { return children.size(); }
 
-  // get the i'th child
-  //TreeNodeT* get_child(int i) const { return children[i].get(); }
+
   TreeNodeT* get_child(int i) const { return children[i]; }
 
-  // get parent
   TreeNodeT* get_parent() const { return parent; }
 
 private:
@@ -1482,10 +1468,9 @@ private:
     child_node->act = new_action;
 
     // apply the new action to the state of the child TreeNode
-    //                child_node->state.apply_action(new_action);
     state.apply_action_mcts(new_action,child_node->state);
     // add to children
-    children.push_back(Ptr(child_node));
+    children.push_back(child_node);
 
     return child_node;
   }
@@ -1498,7 +1483,7 @@ private:
 
 
 
-//template <class Clock>	// template doesn't work for some reason, reverting to typedef
+
 class LoopTimer {
   typedef std::chrono::high_resolution_clock Clock;
   typedef std::chrono::microseconds Units;
@@ -1515,21 +1500,24 @@ public:
 
   //--------------------------------------------------------------
   // initialize timer. Call before the loop starts
-  void init() {
+  inline void init()
+  {
     start_time = Clock::now();
     iterations = 0;
   }
 
   //--------------------------------------------------------------
   // indicate start of loop
-  void loop_start() {
+  inline void loop_start()
+  {
     loop_start_time = Clock::now();
     iterations++;
   }
 
   //--------------------------------------------------------------
   // indicate end of loop
-  void loop_end() {
+  inline void loop_end()
+  {
     auto loop_end_time = Clock::now();
     auto current_loop_duration = std::chrono::duration_cast<Units>(loop_end_time - loop_start_time);
 
@@ -1547,7 +1535,8 @@ public:
 
   //--------------------------------------------------------------
   // check if current total run duration (since init) exceeds max_millis
-  bool check_duration(unsigned int max_millis) const {
+  inline bool check_duration(unsigned int max_millis) const
+  {
     // estimate when the next loop will end
     auto next_loop_end_time = Clock::now() + avg_loop_duration;
     return next_loop_end_time > start_time + std::chrono::milliseconds(max_millis);
@@ -1565,37 +1554,6 @@ public:
     return std::chrono::duration_cast<Units>(run_duration).count();
   }
 
-
-
-  //--------------------------------------------------------------
-  //--------------------------------------------------------------
-  //--------------------------------------------------------------
-  // Example usage (and for testing)
-  static void test(unsigned int max_millis) {
-    LoopTimer timer;
-    timer.verbose = true;
-
-    // initialize timer
-    timer.init();
-
-    while(true) {
-      // indicate start of loop for timer
-      timer.loop_start();
-
-      // sleep for a random duration
-      int sleep_duration = 50 + rand() % 50;
-      std::this_thread::sleep_for(std::chrono::milliseconds(sleep_duration));
-
-      // indicate end of loop for timer
-      timer.loop_end();
-
-      // exit loop if current total run duration (since init) exceeds max_millis
-      if(timer.check_duration(max_millis)) break;
-    }
-    std::cout << "total run time: " << timer.run_duration_micros() << ", ";
-    std::cout << "avg_loop_duration: " << timer.avg_loop_duration_micros() << ", ";
-    std::cout << std::endl;
-  }
 
 private:
   unsigned int iterations;
@@ -1643,27 +1601,32 @@ public:
   }
 
   //--------------------------------------------------------------
-  // get best (immediate) child for given TreeNode based on uct score
-  TreeNode* get_best_uct_child(TreeNode* node, float uct_k) const {
+
+  TreeNode* get_best_uct_child(TreeNode* node, float uct_k) const
+  {
+    //cerr << "get best " << endl;
     // sanity check
-    if(!node->is_fully_expanded()) return NULL;
+    assert(node->is_fully_expanded());
+    //    if(!node->is_fully_expanded()) return NULL;
 
     float best_utc_score = -std::numeric_limits<float>::max();
     TreeNode* best_node = NULL;
 
     // iterate all immediate children and find best UTC score
     int num_children = node->get_num_children();
-    for(int i = 0; i < num_children; i++) {
-      TreeNode* child = node->get_child(i);
-      float uct_exploitation = (float)child->get_value() / (child->get_num_visits() + FLT_EPSILON);
-      float uct_exploration = sqrt( log((float)node->get_num_visits() + 1) / (child->get_num_visits() + FLT_EPSILON) );
-      float uct_score = uct_exploitation + uct_k * uct_exploration;
-
-      if(uct_score > best_utc_score) {
-	best_utc_score = uct_score;
-	best_node = child;
+    for(int i = 0; i < num_children; i++)
+      {
+	TreeNode* child = node->get_child(i);
+	float uct_exploitation = (float)child->get_value() / (child->get_num_visits() + FLT_EPSILON);
+	float uct_exploration = sqrt( log((float)node->get_num_visits() + 1) / (child->get_num_visits() + FLT_EPSILON) );
+	float uct_score = uct_exploitation + uct_k * uct_exploration;
+	
+	if(uct_score > best_utc_score)
+	  {
+	    best_utc_score = uct_score;
+	    best_node = child;
+	  }
       }
-    }
 
     return best_node;
   }
@@ -1674,15 +1637,16 @@ public:
     int most_visits = -1;
     TreeNode* best_node = NULL;
 
-    // iterate all immediate children and find most visited
     int num_children = node->get_num_children();
-    for(int i = 0; i < num_children; i++) {
-      TreeNode* child = node->get_child(i);
-      if(child->get_num_visits() > most_visits) {
-	most_visits = child->get_num_visits();
-	best_node = child;
+    for(int i = 0; i < num_children; i++)
+      {
+	TreeNode* child = node->get_child(i);
+	if(child->get_num_visits() > most_visits)
+	  {
+	    most_visits = child->get_num_visits();
+	    best_node = child;
+	  }
       }
-    }
 
     return best_node;
   }
@@ -1690,7 +1654,8 @@ public:
 
 
   //--------------------------------------------------------------
-  fv_actions_t run(const game_stat& current_state, unsigned int seed = 1, vector<game_stat>* explored_states = nullptr) {
+  fv_actions_t run_mcts(const game_stat& current_state)
+  {
     // initialize timer
     timer.init();
 
@@ -1701,75 +1666,79 @@ public:
 
     // iterate
     iterations = 0;
-    while(true) {
-      // indicate start of loop
-      // cerr << " it " << iterations <<  endl;
-      timer.loop_start();
+    while(true)
+      {
+      
+	// cerr << " it " << iterations <<  endl;
+	timer.loop_start();
 
-      // 1. SELECT. Start at root, dig down into tree using UCT on all fully expanded nodes
-      TreeNode* node = &root_node;
-      while(!node->is_terminal() && node->is_fully_expanded())
-	{
-	  //cerr << " while " << endl;
-	  node = get_best_uct_child(node, uct_k);
-	  //						assert(node);	// sanity check
+	// 1. SELECT. 
+	TreeNode* node = &root_node;
+	while(!node->is_terminal() && node->is_fully_expanded())
+	  {
+	    //cerr << " while " << endl;
+	    node = get_best_uct_child(node, uct_k);
+	    //						assert(node);	// sanity check
+	  }
+
+	//cerr << " ap while " << endl;
+	// 2. EXPAND by adding a single child (if not terminal or not fully expanded)
+	if(!node->is_fully_expanded() && !node->is_terminal()) node = node->expand();
+                    
+	game_stat state_simul(node->get_state());
+	//game_stat state;
+
+	// 3. SIMULATE (if not terminal)
+	if(!node->is_terminal()) {
+
+	  for(unsigned int t = 0; t < simulation_depth; t++)
+	    {
+	      //cerr << " simu " << endl;
+
+	      if(state_simul.is_terminal()) break;
+
+	      //if(state.create_random_action(action))
+	      //{
+	      //state.create_random_action(action);
+	      fv_actions_t action;
+	      state_simul.get_one_random_action(action);
+	      //game_stat new_state;
+	      state_simul.apply_action_mcts(action,state_simul);
+	      //state_simul = new_state;
+	      //state.apply_action(action);
+	      // }
+	      //else
+	      // break;
+	    }
 	}
 
-      //cerr << " ap while " << endl;
-      // 2. EXPAND by adding a single child (if not terminal or not fully expanded)
-      if(!node->is_fully_expanded() && !node->is_terminal()) node = node->expand();
-                    
-      game_stat state_simul(node->get_state());
-      //game_stat state;
+	// get rewards vector for all agents
+	float rewards = state_simul.evaluate();
 
-      // 3. SIMULATE (if not terminal)
-      if(!node->is_terminal()) {
-	fv_actions_t action;
-	for(unsigned int t = 0; t < simulation_depth; t++)
+    
+	// 4. BACK PROPAGATION
+	while(node)
 	  {
-	    //cerr << " simu " << endl;
-
-	    if(state_simul.is_terminal()) break;
-
-	    //if(state.create_random_action(action))
-	    //{
-	    //state.create_random_action(action);
-	    state_simul.get_one_random_action(action);
-	    //game_stat new_state;
-	    state_simul.apply_action_mcts(action,state_simul);
-	    //state_simul = new_state;
-	    //state.apply_action(action);
-	    // }
-	    //else
-	    // break;
+	    node->update(rewards);
+	    node = node->get_parent();
 	  }
+
+	// find best child
+	if(!root_node.is_fully_expanded())
+	  best_node = get_most_visited_child(&root_node);
+	else
+	  best_node = get_best_uct_child(&root_node, uct_k);
+	
+	// indicate end of loop for timer
+	timer.loop_end();
+
+	// exit loop if current total run duration (since init) exceeds max_millis
+	if(max_millis > 0 && timer.check_duration(max_millis)) break;
+
+	// exit loop if current iterations exceeds max_iterations
+	if(max_iterations > 0 && iterations > (int)max_iterations) break;
+	iterations++;
       }
-
-      // get rewards vector for all agents
-      float rewards = state_simul.evaluate();
-
-      // add to history
-      if(explored_states) explored_states->push_back(state_simul);
-
-      // 4. BACK PROPAGATION
-      while(node) {
-	node->update(rewards);
-	node = node->get_parent();
-      }
-
-      // find most visited child
-      best_node = get_most_visited_child(&root_node);
-
-      // indicate end of loop for timer
-      timer.loop_end();
-
-      // exit loop if current total run duration (since init) exceeds max_millis
-      if(max_millis > 0 && timer.check_duration(max_millis)) break;
-
-      // exit loop if current iterations exceeds max_iterations
-      if(max_iterations > 0 && iterations > max_iterations) break;
-      iterations++;
-    }
 
     // return best node's action
     if(best_node) return best_node->get_action();
@@ -1817,12 +1786,12 @@ int main()
       UCT uct;
       uct.uct_k = sqrt(2);
       uct.max_millis = 44;
-      uct.max_iterations = 100;
-      uct.simulation_depth = 10;
+      uct.max_iterations = 00;
+      uct.simulation_depth = 1;
 
-            cerr << " rr " << gs.evaluate() << endl;
+      cerr << " rr " << gs.evaluate() << endl;
       cerr << " UCT " << endl;
-      fv_actions_t a_mcts = uct.run(gs);
+      fv_actions_t a_mcts = uct.run_mcts(gs);
 
       //cerr << ac << endl;
       cerr << "END  UCT " << uct.get_iterations() << endl;
