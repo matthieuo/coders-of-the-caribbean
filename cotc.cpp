@@ -460,7 +460,7 @@ ostream& operator<<(ostream& out, const mine& m)
 
 using fv_ships_t = fast_vect<ship,3>;
 
-using fv_barrels_t = fast_vect<barrel,26>;
+using fv_barrels_t = fast_vect<barrel,30>;
 using fv_balls_t = fast_vect<ball,50>;
 using fv_mines_t = fast_vect<mine,50>;
 
@@ -1140,7 +1140,7 @@ public:
     for(int i=0;i<adv_ships.size;++i)
       {
 	int ran =  rand() % 5;
-	ret_val.push_back(act[i][ran]);
+	ret_val.push_back(act_adv[i][ran]);
 	 
       }
   }
@@ -1248,7 +1248,7 @@ public:
     
     float eval = speed + my_sh - adv_sh + my_rhum - adv_rhum;
 
-    //    cerr << eval << endl;
+    //cerr << eval << endl;
     return eval;
   }
   
@@ -1272,6 +1272,18 @@ public:
   }
     
   //private:
+  game_stat():is_act_computed(false),is_act_computed_adv(false){}
+  game_stat(const game_stat& gs)
+  {
+    is_act_computed = false;
+    is_act_computed_adv = false;
+    my_ships = gs.my_ships;
+
+    adv_ships = gs.adv_ships;
+    bars = gs.bars;
+    balls = gs.balls;
+    mines = gs.mines;  
+  }
   action act[3][5];
   mutable action act_adv[3][5];
   
@@ -1405,7 +1417,7 @@ public:
   //--------------------------------------------------------------
   void update(float rewards) {
     this->value += rewards;
-    this->value /=2 ;
+    //this->value /=2 ;
     num_visits++;
   }
 
@@ -1633,7 +1645,8 @@ public:
 
 
   //--------------------------------------------------------------
-  TreeNode* get_most_visited_child(TreeNode* node) const {
+  TreeNode* get_most_visited_child(TreeNode* node) const
+  {
     int most_visits = -1;
     TreeNode* best_node = NULL;
 
@@ -1651,6 +1664,24 @@ public:
     return best_node;
   }
 
+  TreeNode* get_most_reward_child(TreeNode* node) const
+  {
+    int most_reward = -1000;
+    TreeNode* best_node = NULL;
+
+    int num_children = node->get_num_children();
+    for(int i = 0; i < num_children; i++)
+      {
+	TreeNode* child = node->get_child(i);
+	if(child->get_value() > most_reward)
+	  {
+	    most_reward = child->get_value();
+	    best_node = child;
+	  }
+      }
+
+    return best_node;
+  }
 
 
   //--------------------------------------------------------------
@@ -1725,7 +1756,8 @@ public:
 
 	// find best child
 	//if(!root_node.is_fully_expanded())
-	best_node = get_most_visited_child(&root_node);
+	//best_node = get_most_visited_child(&root_node);
+	best_node = get_most_reward_child(&root_node);
 	  //else
 	  //best_node = get_best_uct_child(&root_node, uct_k);
 	
@@ -1787,7 +1819,7 @@ int main()
       uct.uct_k = sqrt(2);
       uct.max_millis = 44;
       uct.max_iterations = 00;
-      uct.simulation_depth = 1;
+      uct.simulation_depth = 8;
 
       cerr << " rr " << gs.evaluate() << endl;
       cerr << " UCT " << endl;
