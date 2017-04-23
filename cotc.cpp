@@ -1724,10 +1724,10 @@ public:
 	  }
 
 	// find best child
-	if(!root_node.is_fully_expanded())
-	  best_node = get_most_visited_child(&root_node);
-	else
-	  best_node = get_best_uct_child(&root_node, uct_k);
+	//if(!root_node.is_fully_expanded())
+	best_node = get_most_visited_child(&root_node);
+	  //else
+	  //best_node = get_best_uct_child(&root_node, uct_k);
 	
 	// indicate end of loop for timer
 	timer.loop_end();
