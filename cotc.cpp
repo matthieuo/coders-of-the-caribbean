@@ -59,11 +59,11 @@ class fast_vect
 public:
 
   /* fast_vect(const fast_vect& fv)
-  {
-    memcpy(arr,fv.arr,fv.size*sizeof(T));
-    size = fv.size;
-    }
-    fast_vect &operator=(const fast_vect& f){}*/
+     {
+     memcpy(arr,fv.arr,fv.size*sizeof(T));
+     size = fv.size;
+     }
+     fast_vect &operator=(const fast_vect& f){}*/
   T arr[N];
   int size = 0;
 
@@ -125,11 +125,11 @@ public:
   
 
   /* pos toOffsetCoordinate() const
-  {
-    int newX = x + (z - (z & 1)) / 2;
-    int newY = z;
-    return pos(newX, newY);
-    }*/
+     {
+     int newX = x + (z - (z & 1)) / 2;
+     int newY = z;
+     return pos(newX, newY);
+     }*/
 
   CubeCoordinate neighbor(int orientation) const 
   {
@@ -206,8 +206,8 @@ struct pos
 
 ostream& operator<<(ostream& out, const pos& p)
 {
-    out << "(" << p.x << ", " << p.y << ")"; 
-    return out;
+  out << "(" << p.x << ", " << p.y << ")"; 
+  return out;
 }
 const int NUM_ACTIONS = 5;
 
@@ -271,7 +271,7 @@ ostream& operator<<(ostream& out, const action& a)
       out << "OTH ";
       break;
     }
-    return out;
+  return out;
 }
 
 struct entity
@@ -403,7 +403,7 @@ struct ship : public entity
     rhum += health;
     if (rhum > MAX_SHIP_HEALTH)
       {
-      rhum = MAX_SHIP_HEALTH;
+	rhum = MAX_SHIP_HEALTH;
       }
   }
   
@@ -438,23 +438,23 @@ struct mine : public entity
 ostream& operator<<(ostream& out, const ship& s)
 {
   out << "SHIP " << s.id <<";"<<s.p<<";"<<s.ori << ";"<<s.speed<<";"<<s.rhum; 
-    return out;
+  return out;
 }
 ostream& operator<<(ostream& out, const barrel& b)
 {
   out  << "BARR " << b.id <<";"<<b.p<<";"<<b.level; 
-    return out;
+  return out;
 }
 ostream& operator<<(ostream& out, const ball& b)
 {
   out << "BALL " << b.id <<";"<<b.p<<";"<<b.turn; 
-    return out;
+  return out;
 }
 
 ostream& operator<<(ostream& out, const mine& m)
 {
   out << "MINE " << m.id <<";"<<m.p; 
-    return out;
+  return out;
 }
 
 using fv_ships_t = fast_vect<ship,3>;
@@ -464,7 +464,7 @@ using fv_balls_t = fast_vect<ball,50>;
 using fv_mines_t = fast_vect<mine,50>;
 
 using fv_actions_t = fast_vect<action,3>;
-using fv_all_actions_t = fast_vect<fv_actions_t,5*5*5>;
+using fv_all_actions_t = fast_vect<fv_actions_t,3*3*3>;
 
 bool operator==(const fv_actions_t&a1,const fv_actions_t&a2)
 {
@@ -487,6 +487,10 @@ class game_stat
 public:
   void update_state()
   {
+    int sav_cooldown[3];
+    for(int i=0;i<3;++i)
+      sav_cooldown[i] = my_ships.arr[i].cannonCooldown;
+    
     reset_all_vect();
     int myShipCount; // the number of remaining ships
     cin >> myShipCount; cin.ignore();
@@ -513,9 +517,14 @@ public:
 	if(entityType == "SHIP")
 	  {
 	    if(arg4 == 1)
-	      my_ships.push_back(ship(entityId,{x,y},arg1,arg2,arg3));
+	      {
+		my_ships.push_back(ship(entityId,{x,y},arg1,arg2,arg3));
+		my_ships.arr[my_ships.size - 1].cannonCooldown = sav_cooldown[my_ships.size - 1];
+	      }
 	    else
-	      adv_ships.push_back(ship(entityId,{x,y},arg1,arg2,arg3));
+	      {
+		adv_ships.push_back(ship(entityId,{x,y},arg1,arg2,arg3));
+	      }
 	    continue;
 	  }
 
@@ -733,12 +742,53 @@ public:
     
 
       
-    bool collisionDetected = true;
-    while (collisionDetected)
-      {
-	collisionDetected = false;
+	bool collisionDetected = true;
+	while (collisionDetected)
+	  {
+	    collisionDetected = false;
 	
 	
+	    for(int i=0;i<new_gs.my_ships.size + new_gs.adv_ships.size;++i)
+	      {
+		ship *cur_ship;
+		if(i<new_gs.my_ships.size)
+		  {
+		    cur_ship = &new_gs.my_ships.arr[i];
+		  }
+		else
+		  {
+		    cur_ship = &new_gs.adv_ships.arr[i-new_gs.my_ships.size];
+		  }
+
+		//cerr << "tt " <<  cur_ship->id << endl;
+		//cerr << "col " << collisions.size << endl;
+	    
+		if (cur_ship->newBowIntersect(new_gs.my_ships,new_gs.adv_ships))
+		  {
+		    //cerr << "COL " << endl;
+		
+		    collisions.push_back(cur_ship);
+		    //		exit(1);
+		  }
+	      }
+	
+	
+	    for (ship *s : collisions)
+	      {
+		// Revert last move
+		s->newPosition = s->p;
+		s->newBowCoordinate = s->bow();
+		s->newSternCoordinate = s->stern();
+	    
+		// Stop ships
+		s->speed = 0;
+	    
+		collisionDetected = true;
+	      }
+	    collisions.reset();
+	  }
+
+	// Move ships to their new location
 	for(int i=0;i<new_gs.my_ships.size + new_gs.adv_ships.size;++i)
 	  {
 	    ship *cur_ship;
@@ -750,65 +800,24 @@ public:
 	      {
 		cur_ship = &new_gs.adv_ships.arr[i-new_gs.my_ships.size];
 	      }
-
-	    //cerr << "tt " <<  cur_ship->id << endl;
-	    //cerr << "col " << collisions.size << endl;
-	    
-	    if (cur_ship->newBowIntersect(new_gs.my_ships,new_gs.adv_ships))
-	      {
-		//cerr << "COL " << endl;
-		
-		collisions.push_back(cur_ship);
-		//		exit(1);
-	      }
-	  }
 	
-	
-	for (ship *s : collisions)
-	  {
-	    // Revert last move
-	    s->newPosition = s->p;
-	    s->newBowCoordinate = s->bow();
-	    s->newSternCoordinate = s->stern();
-	    
-	    // Stop ships
-	    s->speed = 0;
-	    
-	    collisionDetected = true;
+	    cur_ship->p = cur_ship->newPosition;
 	  }
-	  collisions.reset();
-      }
-
-    // Move ships to their new location
-    for(int i=0;i<new_gs.my_ships.size + new_gs.adv_ships.size;++i)
-      {
-	ship *cur_ship;
-	if(i<new_gs.my_ships.size)
-	  {
-	    cur_ship = &new_gs.my_ships.arr[i];
-	  }
-	else
-	  {
-	    cur_ship = &new_gs.adv_ships.arr[i-new_gs.my_ships.size];
-	  }
-	
-	cur_ship->p = cur_ship->newPosition;
-      }
     
-    // Check collisions
-    for(int i=0;i<new_gs.my_ships.size + new_gs.adv_ships.size;++i)
-      {
-	ship *cur_ship;
-	if(i<new_gs.my_ships.size)
+	// Check collisions
+	for(int i=0;i<new_gs.my_ships.size + new_gs.adv_ships.size;++i)
 	  {
-	    cur_ship = &new_gs.my_ships.arr[i];
+	    ship *cur_ship;
+	    if(i<new_gs.my_ships.size)
+	      {
+		cur_ship = &new_gs.my_ships.arr[i];
+	      }
+	    else
+	      {
+		cur_ship = &new_gs.adv_ships.arr[i-new_gs.my_ships.size];
+	      }
+	    checkCollisions(new_gs,*cur_ship);
 	  }
-	else
-	  {
-	    cur_ship = &new_gs.adv_ships.arr[i-new_gs.my_ships.size];
-	  }
-	checkCollisions(new_gs,*cur_ship);
-      }
       }
   }
 
@@ -872,7 +881,7 @@ public:
 	    
 	    collisionDetected = true;
 	  }
-	  collisions.reset();
+	collisions.reset();
       }
 
     // apply rotation
@@ -908,7 +917,7 @@ public:
       }
     
         
-    }
+  }
   
 
 
@@ -963,16 +972,16 @@ public:
 	      }
 
 	    /*
-	    else if (s.stern().distanceTo(m.p) <= 1 || s.bow().distanceTo(m.p) <= 1 || s.p.distanceTo(m.p) <= 1)
+	      else if (s.stern().distanceTo(m.p) <= 1 || s.bow().distanceTo(m.p) <= 1 || s.p.distanceTo(m.p) <= 1)
 	      {
-		cerr << "**  min petit dam " << m << " " << s << endl;
-		s.damage(NEAR_MINE_DAMAGE);
-		m.to_remove = true;
-		}*/
+	      cerr << "**  min petit dam " << m << " " << s << endl;
+	      s.damage(NEAR_MINE_DAMAGE);
+	      m.to_remove = true;
+	      }*/
 	  }
       }
     
-    }
+  }
 
   void explode_min_bar(game_stat &gs) const
   {
@@ -1001,21 +1010,75 @@ public:
     
   }
  
-  unsigned int num_actions() const
-  {
+  /*unsigned int num_actions() const
+    {
     return pow(NUM_ACTIONS,my_ships.size); 
-  }
+    }*/
 
   void apply_action_mcts(const fv_actions_t &my_a,game_stat &gs) const
   {
     fv_actions_t adv;
-    for (int i = 0; i < adv_ships.size; i++)
-      adv.push_back(action(true));
+    //for (int i = 0; i < adv_ships.size; i++)
+    //  adv.push_back(action(true));
+    get_one_random_action_adv(adv);
     
     simul_next_state(my_a,adv,gs);
   }
 
 
+  void init_action_random_adv() const
+  {
+
+    for (int i = 0; i < adv_ships.size; i++)
+      {
+	act_adv[i][0].act = SLOWER;
+	act_adv[i][1].act = WAIT;
+	
+	if(adv_ships.arr[i].cannonCooldown == 0)
+	  {
+	    //we can fire
+	    //choose a fire option for adv
+	    int dist = 10000;
+	    pos ptmp{0,0};
+	    for(const ship &s:my_ships)
+	      {
+		int d = s.p.distanceTo(adv_ships.arr[i].p);
+		if(d < dist)
+		  {
+		    dist = d;
+		    ptmp = s.p;
+		  }
+	      }
+	    act_adv[i][0].arg = ptmp;
+	    act_adv[i][0].act = FIRE;
+	    
+	    dist = 10000;
+	    //mine option
+	    for(const mine &s:mines)
+	      {
+		int d = s.p.distanceTo(adv_ships.arr[i].p);
+		if(d < dist)
+		  {
+		    dist = d;
+		    ptmp = s.p;
+		  }
+	      }
+	    act_adv[i][1].arg = ptmp;
+	    act_adv[i][1].act = FIRE;
+	  }
+
+
+	act_adv[i][2].act = PORT;
+	act_adv[i][3].act = STARBOARD;
+	act_adv[i][4].act = FASTER;
+
+      }
+
+    is_act_computed_adv = true;
+    
+    
+  }
+  
   void init_action_random()
   {
 
@@ -1069,6 +1132,17 @@ public:
   }
 
 
+  void get_one_random_action_adv(fv_actions_t &ret_val) const
+  {
+    if(!is_act_computed_adv) init_action_random_adv();
+    ret_val.reset();
+    for(int i=0;i<adv_ships.size;++i)
+      {
+	int ran =  rand() % 5;
+	ret_val.push_back(act[i][ran]);
+	 
+      }
+  }
   void get_one_random_action(fv_actions_t &ret_val)
   {
     if(!is_act_computed) init_action_random();
@@ -1081,9 +1155,11 @@ public:
 	ret_val.push_back(act[i][ran]);
 
       }
-   
+
+    
 
   }
+  
   void create_random_action_list(fv_all_actions_t &ret_value)
   {
     ret_value.reset();
@@ -1106,31 +1182,35 @@ public:
 	  {
 	    fv_actions_t t;
 	    t.push_back(act[0][i]);
-	    cerr << act[0][i] <<endl;
+	    //cerr << act[0][i] <<endl;
 	    for(int j=0;j<5;++j)
 	      {
 		t.push_back(act[1][j]);
-		cerr << act[1][i] <<endl;
-		cerr << "********" << endl;
+		//cerr << act[1][i] <<endl;
+		//cerr << "********" << endl;
 		ret_value.push_back(t); //faire pour le reste
 		t.size--;
 	      }
 	  }
 	break;
       case 3:
-	for(int i=0;i<5;++i)
+	for(int i=0;i<3;++i)
 	  {
 	    fv_actions_t t;
-	    t.push_back(act[0][i]);
+	    int ran =  rand() % 5;
+
+	    t.push_back(act[0][ran]);
 
 	    //cerr << act[0][i] << endl;
-	    for(int j=0;j<5;++j)
+	    for(int j=0;j<3;++j)
 	      {
 		//cerr << act[1][j] << endl;
-		t.push_back(act[1][j]);
-		for(int k=0;k<5;++k)
+		int ran =  rand() % 5;
+		t.push_back(act[1][ran]);
+		for(int k=0;k<3;++k)
 		  {
-		    t.push_back(act[2][k]);
+		    int ran =  rand() % 5;
+		    t.push_back(act[2][ran]);
 		    //cerr << act[2][i] << endl;
 		    ret_value.push_back(t); //faire pour le reste
 		    t.size--;
@@ -1152,8 +1232,12 @@ public:
     float my_rhum = 0;
     float adv_rhum = 0;
 
+    float speed = 0;
     for(const ship &s:my_ships)
-      my_rhum += s.rhum;
+      {
+	my_rhum += s.rhum;
+	speed += s.speed;
+      }
 
     for(const ship &s:adv_ships)
       adv_rhum += s.rhum;
@@ -1161,7 +1245,7 @@ public:
 
     
     
-    return my_sh - adv_sh + my_rhum - adv_rhum;
+    return speed + my_sh - adv_sh + my_rhum - adv_rhum;
   }
   
   inline int get_my_ship_count() const
@@ -1185,7 +1269,10 @@ public:
     
   //private:
   action act[3][5];
+  mutable action act_adv[3][5];
+  
   bool is_act_computed = false;
+  mutable bool is_act_computed_adv = false;
   
   fv_ships_t my_ships;
 
@@ -1247,460 +1334,458 @@ void bench(const game_stat &gs)
     }
 }
 //############## MCTS ##############
-namespace msa {
-    namespace mcts {
 
 
-        class TreeNodeT {
-	  //typedef std::shared_ptr< TreeNodeT > Ptr;
-	  typedef  TreeNodeT*  Ptr;
+class TreeNodeT {
+  //typedef std::shared_ptr< TreeNodeT > Ptr;
+  typedef  TreeNodeT*  Ptr;
 
-        public:
-            //--------------------------------------------------------------
-            TreeNodeT(const game_stat& state, TreeNodeT* parent = NULL):
-                state(state),
-                //action(),
-                parent(parent),
-		agent_id(0),
-                num_visits(0),
-                value(0),
-                depth(parent ? parent->depth + 1 : 0)
-            {
-            }
+public:
+  //--------------------------------------------------------------
+  TreeNodeT(const game_stat& state, TreeNodeT* parent = NULL):
+    state(state),
+    //action(),
+    parent(parent),
+    agent_id(0),
+    num_visits(0),
+    value(0),
+    depth(parent ? parent->depth + 1 : 0)
+  {
+  }
 
 
-            //--------------------------------------------------------------
-            // expand by adding a single child
-            TreeNodeT* expand() {
-                // sanity check that we're not already fully expanded
-                if(is_fully_expanded()) return NULL;
+  //--------------------------------------------------------------
+  // expand by adding a single child
+  TreeNodeT* expand() {
+    // sanity check that we're not already fully expanded
+    if(is_fully_expanded()) return NULL;
 
-                // sanity check that we don't have more children than we do actions
-                //assert(children.size() < actions.size()) ;
+    // sanity check that we don't have more children than we do actions
+    //assert(children.size() < actions.size()) ;
 
-                // if this is the first expansion and we haven't yet got all of the possible actions
-		//	if(pos_act_me.size == 0 ||pos_act_oth.size == 0 ) {
-		  // retrieve list of actions from the state
+    // if this is the first expansion and we haven't yet got all of the possible actions
+    //	if(pos_act_me.size == 0 ||pos_act_oth.size == 0 ) {
+    // retrieve list of actions from the state
 
 		
 
-		if(all_actions.size == 0)
-		  {
-		    state.create_random_action_list(all_actions);
-		    random_shuffle(all_actions.begin(), all_actions.end());
-		  }
-		//cerr << " expand " << endl;
-		/*while(is_action_exist_child(a))
-		  {
-		    state.create_random_action(a);
-		    }*/
+    if(all_actions.size == 0)
+      {
+	state.create_random_action_list(all_actions);
+	random_shuffle(all_actions.begin(), all_actions.end());
+      }
+    //cerr << " expand " << endl;
+    /*while(is_action_exist_child(a))
+      {
+      state.create_random_action(a);
+      }*/
 
-		//cerr << " en expand " << endl;
-		//check if the action exists on a child
+    //cerr << " en expand " << endl;
+    //check if the action exists on a child
 
 		
-		  // randomize the order
-		  //std::random_shuffle(actions.begin(), actions.end());
-		  //}
+    // randomize the order
+    //std::random_shuffle(actions.begin(), actions.end());
+    //}
 
-                // add the next action in queue as a child
-                return add_child_with_action(all_actions.arr[children.size()]); //????????
-            }
+    // add the next action in queue as a child
+    //		cerr << all_actions.size << " " << endl;//all_actions.arr[children.size()] << endl;
+    return add_child_with_action(all_actions.arr[children.size()]); //????????
+  }
 
 	  
 
 
-	  bool is_action_exist_child(const fv_actions_t &a) const
-	  {
+  bool is_action_exist_child(const fv_actions_t &a) const
+  {
 
-	    for(int i=0;i<get_num_children();++i)
-	      {
-		if(get_child(i)->act == a)
-		  return true;
-	      }
-	    return false;
+    for(int i=0;i<get_num_children();++i)
+      {
+	if(get_child(i)->act == a)
+	  return true;
+      }
+    return false;
 	              
-	  }
+  }
 
-            //--------------------------------------------------------------
-            void update(float rewards) {
-                this->value += rewards;
-                num_visits++;
-            }
-
-
-            //--------------------------------------------------------------
-            // GETTERS
-            // state of the TreeNode
-            const game_stat& get_state() const { return state; }
-
-            // the action that led to this state
-            const fv_actions_t& get_action() const { return act; }
-
-            // all children have been expanded and simulated
-	  bool is_fully_expanded() const { return children.empty() == false && children.size() == state.num_actions(); }
-
-            // does this TreeNode end the search (i.e. the game)
-            bool is_terminal() const { return state.is_terminal(); }
-
-            // number of times the TreeNode has been visited
-            int get_num_visits() const { return num_visits; }
-
-            // accumulated value (wins)
-            float get_value() const __attribute__((always_inline)) { return value; }
-
-            // how deep the TreeNode is in the tree
-            int get_depth() const { return depth; }
-
-            // number of children the TreeNode has
-            int get_num_children() const { return children.size(); }
-
-            // get the i'th child
-            //TreeNodeT* get_child(int i) const { return children[i].get(); }
-	  TreeNodeT* get_child(int i) const { return children[i]; }
-
-            // get parent
-            TreeNodeT* get_parent() const { return parent; }
-
-        private:
-            game_stat state;			// the state of this TreeNode
-	  //action act;			// the action which led to the state of this TreeNode
-	  fv_actions_t act;
-
-	  TreeNodeT* parent;		// parent of this TreeNode
-			int agent_id;			// agent who made the decision
-
-            int num_visits;			// number of times TreeNode has been visited
-            float value;			// value of this TreeNode
-            int depth;
-
-            std::vector< Ptr > children;	// all current children
+  //--------------------------------------------------------------
+  void update(float rewards) {
+    this->value += rewards;
+    num_visits++;
+  }
 
 
-	  fv_all_actions_t all_actions; //possible actions
-	  //std::vector< Action > actions;			// possible actions from this state
+  //--------------------------------------------------------------
+  // GETTERS
+  // state of the TreeNode
+  const game_stat& get_state() const { return state; }
+
+  // the action that led to this state
+  const fv_actions_t& get_action() const { return act; }
+
+  // all children have been expanded and simulated
+  bool is_fully_expanded() const { return children.empty() == false && (int)children.size() == all_actions.size; }
+
+  // does this TreeNode end the search (i.e. the game)
+  bool is_terminal() const { return state.is_terminal(); }
+
+  // number of times the TreeNode has been visited
+  int get_num_visits() const { return num_visits; }
+
+  // accumulated value (wins)
+  float get_value() const __attribute__((always_inline)) { return value; }
+
+  // how deep the TreeNode is in the tree
+  int get_depth() const { return depth; }
+
+  // number of children the TreeNode has
+  int get_num_children() const { return children.size(); }
+
+  // get the i'th child
+  //TreeNodeT* get_child(int i) const { return children[i].get(); }
+  TreeNodeT* get_child(int i) const { return children[i]; }
+
+  // get parent
+  TreeNodeT* get_parent() const { return parent; }
+
+private:
+  game_stat state;			// the state of this TreeNode
+  //action act;			// the action which led to the state of this TreeNode
+  fv_actions_t act;
+
+  TreeNodeT* parent;		// parent of this TreeNode
+  int agent_id;			// agent who made the decision
+
+  int num_visits;			// number of times TreeNode has been visited
+  float value;			// value of this TreeNode
+  int depth;
+
+  std::vector< Ptr > children;	// all current children
 
 
-            //--------------------------------------------------------------
-            // create a clone of the current state, apply action, and add as child
-            TreeNodeT* add_child_with_action(const fv_actions_t& new_action) {
-                // create a new TreeNode with the same state (will get cloned) as this TreeNode
-                TreeNodeT* child_node = new TreeNodeT(state, this);
+  fv_all_actions_t all_actions; //possible actions
+  //std::vector< Action > actions;			// possible actions from this state
 
-                // set the action of the child to be the new action
-                child_node->act = new_action;
 
-                // apply the new action to the state of the child TreeNode
-		//                child_node->state.apply_action(new_action);
-		state.apply_action_mcts(new_action,child_node->state);
-                // add to children
-                children.push_back(Ptr(child_node));
+  //--------------------------------------------------------------
+  // create a clone of the current state, apply action, and add as child
+  TreeNodeT* add_child_with_action(const fv_actions_t& new_action) {
+    // create a new TreeNode with the same state (will get cloned) as this TreeNode
+    TreeNodeT* child_node = new TreeNodeT(state, this);
 
-                return child_node;
-            }
+    // set the action of the child to be the new action
+    child_node->act = new_action;
 
-        };
+    // apply the new action to the state of the child TreeNode
+    //                child_node->state.apply_action(new_action);
+    state.apply_action_mcts(new_action,child_node->state);
+    // add to children
+    children.push_back(Ptr(child_node));
 
-    }
-}
+    return child_node;
+  }
+
+};
+
+   
 
 //******************************************************************
 
-namespace msa {
-
-    //template <class Clock>	// template doesn't work for some reason, reverting to typedef
-    class LoopTimer {
-        typedef std::chrono::high_resolution_clock Clock;
-        typedef std::chrono::microseconds Units;
-    public:
-        bool verbose;
-
-        Clock::time_point start_time;
-        Clock::time_point loop_start_time;
-
-        Units avg_loop_duration;
-        Units run_duration;
-
-        LoopTimer():verbose(false) {}
-
-        //--------------------------------------------------------------
-        // initialize timer. Call before the loop starts
-        void init() {
-            start_time = Clock::now();
-            iterations = 0;
-        }
-
-        //--------------------------------------------------------------
-        // indicate start of loop
-        void loop_start() {
-            loop_start_time = Clock::now();
-            iterations++;
-        }
-
-        //--------------------------------------------------------------
-        // indicate end of loop
-        void loop_end() {
-            auto loop_end_time = Clock::now();
-            auto current_loop_duration = std::chrono::duration_cast<Units>(loop_end_time - loop_start_time);
-
-            run_duration = std::chrono::duration_cast<Units>(loop_end_time - start_time);
-            avg_loop_duration = std::chrono::duration_cast<Units>(run_duration/iterations);
-
-            if(verbose) {
-                std::cout << iterations << ": ";
-                std::cout << "run_duration: " << run_duration.count() << ", ";
-                std::cout << "current_loop_duration: " << current_loop_duration.count() << ", ";
-                std::cout << "avg_loop_duration: " << avg_loop_duration.count() << ", ";
-                std::cout << std::endl;
-            }
-        }
-
-        //--------------------------------------------------------------
-        // check if current total run duration (since init) exceeds max_millis
-        bool check_duration(unsigned int max_millis) const {
-            // estimate when the next loop will end
-            auto next_loop_end_time = Clock::now() + avg_loop_duration;
-            return next_loop_end_time > start_time + std::chrono::milliseconds(max_millis);
-        }
-
-        //--------------------------------------------------------------
-        // return average loop duration
-        unsigned int avg_loop_duration_micros() const {
-            return std::chrono::duration_cast<Units>(avg_loop_duration).count();
-        }
-
-        //--------------------------------------------------------------
-        // return current total run duration (since init)
-        unsigned int run_duration_micros() const {
-            return std::chrono::duration_cast<Units>(run_duration).count();
-        }
 
 
+//template <class Clock>	// template doesn't work for some reason, reverting to typedef
+class LoopTimer {
+  typedef std::chrono::high_resolution_clock Clock;
+  typedef std::chrono::microseconds Units;
+public:
+  bool verbose;
 
-        //--------------------------------------------------------------
-        //--------------------------------------------------------------
-        //--------------------------------------------------------------
-        // Example usage (and for testing)
-        static void test(unsigned int max_millis) {
-            LoopTimer timer;
-            timer.verbose = true;
+  Clock::time_point start_time;
+  Clock::time_point loop_start_time;
 
-            // initialize timer
-            timer.init();
+  Units avg_loop_duration;
+  Units run_duration;
 
-            while(true) {
-                // indicate start of loop for timer
-                timer.loop_start();
+  LoopTimer():verbose(false) {}
 
-                // sleep for a random duration
-                int sleep_duration = 50 + rand() % 50;
-                std::this_thread::sleep_for(std::chrono::milliseconds(sleep_duration));
+  //--------------------------------------------------------------
+  // initialize timer. Call before the loop starts
+  void init() {
+    start_time = Clock::now();
+    iterations = 0;
+  }
 
-                // indicate end of loop for timer
-                timer.loop_end();
+  //--------------------------------------------------------------
+  // indicate start of loop
+  void loop_start() {
+    loop_start_time = Clock::now();
+    iterations++;
+  }
 
-                // exit loop if current total run duration (since init) exceeds max_millis
-                if(timer.check_duration(max_millis)) break;
-            }
-            std::cout << "total run time: " << timer.run_duration_micros() << ", ";
-            std::cout << "avg_loop_duration: " << timer.avg_loop_duration_micros() << ", ";
-            std::cout << std::endl;
-        }
+  //--------------------------------------------------------------
+  // indicate end of loop
+  void loop_end() {
+    auto loop_end_time = Clock::now();
+    auto current_loop_duration = std::chrono::duration_cast<Units>(loop_end_time - loop_start_time);
 
-    private:
-        unsigned int iterations;
-    };
+    run_duration = std::chrono::duration_cast<Units>(loop_end_time - start_time);
+    avg_loop_duration = std::chrono::duration_cast<Units>(run_duration/iterations);
 
-
-
-
-}
-
-namespace msa {
-    namespace mcts {
-
-		// State must comply with State Interface (see IState.h)
-		// Action can be anything (which your State class knows how to handle)
-      //template <class State, typename Action>
-        class UCT {
-            typedef TreeNodeT TreeNode;
-
-        private:
-            LoopTimer timer;
-            int iterations;
-
-        public:
-            float uct_k;					// k value in UCT function. default = sqrt(2)
-            unsigned int max_iterations;	// do a maximum of this many iterations (0 to run till end)
-            unsigned int max_millis;		// run for a maximum of this many milliseconds (0 to run till end)
-            unsigned int simulation_depth;	// how many ticks (frames) to run simulation for
-
-            //--------------------------------------------------------------
-            UCT() :
-                iterations(0),
-                uct_k( sqrt(2) ), 
-                max_iterations( 100 ),
-                max_millis( 0 ),
-                simulation_depth( 10 )
-            {}
-
-
-            //--------------------------------------------------------------
-            const LoopTimer & get_timer() const {
-                return timer;
-            }
-
-	  int get_iterations() const {
-                return iterations;
-            }
-
-            //--------------------------------------------------------------
-            // get best (immediate) child for given TreeNode based on uct score
-            TreeNode* get_best_uct_child(TreeNode* node, float uct_k) const {
-                // sanity check
-                if(!node->is_fully_expanded()) return NULL;
-
-                float best_utc_score = -std::numeric_limits<float>::max();
-                TreeNode* best_node = NULL;
-
-                // iterate all immediate children and find best UTC score
-                int num_children = node->get_num_children();
-                for(int i = 0; i < num_children; i++) {
-                    TreeNode* child = node->get_child(i);
-                    float uct_exploitation = (float)child->get_value() / (child->get_num_visits() + FLT_EPSILON);
-                    float uct_exploration = sqrt( log((float)node->get_num_visits() + 1) / (child->get_num_visits() + FLT_EPSILON) );
-                    float uct_score = uct_exploitation + uct_k * uct_exploration;
-
-                    if(uct_score > best_utc_score) {
-                        best_utc_score = uct_score;
-                        best_node = child;
-                    }
-                }
-
-                return best_node;
-            }
-
-
-            //--------------------------------------------------------------
-            TreeNode* get_most_visited_child(TreeNode* node) const {
-                int most_visits = -1;
-                TreeNode* best_node = NULL;
-
-                // iterate all immediate children and find most visited
-                int num_children = node->get_num_children();
-                for(int i = 0; i < num_children; i++) {
-                    TreeNode* child = node->get_child(i);
-                    if(child->get_num_visits() > most_visits) {
-                        most_visits = child->get_num_visits();
-                        best_node = child;
-                    }
-                }
-
-                return best_node;
-            }
-
-
-
-            //--------------------------------------------------------------
-            fv_actions_t run(const game_stat& current_state, unsigned int seed = 1, vector<game_stat>* explored_states = nullptr) {
-                // initialize timer
-                timer.init();
-
-                // initialize root TreeNode with current state
-                TreeNode root_node(current_state);
-
-                TreeNode* best_node = NULL;
-
-                // iterate
-                iterations = 0;
-                while(true) {
-                    // indicate start of loop
-		  // cerr << " it " << iterations <<  endl;
-                    timer.loop_start();
-
-                    // 1. SELECT. Start at root, dig down into tree using UCT on all fully expanded nodes
-                    TreeNode* node = &root_node;
-                    while(!node->is_terminal() && node->is_fully_expanded())
-		      {
-			//cerr << " while " << endl;
-                        node = get_best_uct_child(node, uct_k);
-//						assert(node);	// sanity check
-		      }
-
-		    //cerr << " ap while " << endl;
-                    // 2. EXPAND by adding a single child (if not terminal or not fully expanded)
-                    if(!node->is_fully_expanded() && !node->is_terminal()) node = node->expand();
-                    
-		    //                    game_stat state(node->get_state());
-		    game_stat state;
-
-                    // 3. SIMULATE (if not terminal)
-                    if(!node->is_terminal()) {
-                        fv_actions_t action;
-                        for(unsigned int t = 0; t < simulation_depth; t++)
-			  {
-			    //cerr << " simu " << endl;
-                            if(state.is_terminal()) break;
-
-                            //if(state.create_random_action(action))
-			    //{
-			    //state.create_random_action(action);
-			    state.get_one_random_action(action);
-			    node->get_state().apply_action_mcts(action,state);
-                                //state.apply_action(action);
-				// }
-			      //else
-			      // break;
-                        }
-                    }
-
-                    // get rewards vector for all agents
-                    float rewards = state.evaluate();
-
-                    // add to history
-                    if(explored_states) explored_states->push_back(state);
-
-                    // 4. BACK PROPAGATION
-                    while(node) {
-                        node->update(rewards);
-                        node = node->get_parent();
-                    }
-
-                    // find most visited child
-                    best_node = get_most_visited_child(&root_node);
-
-                    // indicate end of loop for timer
-                    timer.loop_end();
-
-                    // exit loop if current total run duration (since init) exceeds max_millis
-                    if(max_millis > 0 && timer.check_duration(max_millis)) break;
-
-                    // exit loop if current iterations exceeds max_iterations
-                    if(max_iterations > 0 && iterations > max_iterations) break;
-                    iterations++;
-                }
-
-                // return best node's action
-                if(best_node) return best_node->get_action();
-
-                // we shouldn't be here
-		fv_actions_t aa;
-		
-		//current_state.get_one_random_action(aa);
-		cerr << " HE UUUU " << endl;
-                return aa;
-            }
-
-
-        };
+    if(verbose) {
+      std::cout << iterations << ": ";
+      std::cout << "run_duration: " << run_duration.count() << ", ";
+      std::cout << "current_loop_duration: " << current_loop_duration.count() << ", ";
+      std::cout << "avg_loop_duration: " << avg_loop_duration.count() << ", ";
+      std::cout << std::endl;
     }
-}
+  }
+
+  //--------------------------------------------------------------
+  // check if current total run duration (since init) exceeds max_millis
+  bool check_duration(unsigned int max_millis) const {
+    // estimate when the next loop will end
+    auto next_loop_end_time = Clock::now() + avg_loop_duration;
+    return next_loop_end_time > start_time + std::chrono::milliseconds(max_millis);
+  }
+
+  //--------------------------------------------------------------
+  // return average loop duration
+  unsigned int avg_loop_duration_micros() const {
+    return std::chrono::duration_cast<Units>(avg_loop_duration).count();
+  }
+
+  //--------------------------------------------------------------
+  // return current total run duration (since init)
+  unsigned int run_duration_micros() const {
+    return std::chrono::duration_cast<Units>(run_duration).count();
+  }
+
+
+
+  //--------------------------------------------------------------
+  //--------------------------------------------------------------
+  //--------------------------------------------------------------
+  // Example usage (and for testing)
+  static void test(unsigned int max_millis) {
+    LoopTimer timer;
+    timer.verbose = true;
+
+    // initialize timer
+    timer.init();
+
+    while(true) {
+      // indicate start of loop for timer
+      timer.loop_start();
+
+      // sleep for a random duration
+      int sleep_duration = 50 + rand() % 50;
+      std::this_thread::sleep_for(std::chrono::milliseconds(sleep_duration));
+
+      // indicate end of loop for timer
+      timer.loop_end();
+
+      // exit loop if current total run duration (since init) exceeds max_millis
+      if(timer.check_duration(max_millis)) break;
+    }
+    std::cout << "total run time: " << timer.run_duration_micros() << ", ";
+    std::cout << "avg_loop_duration: " << timer.avg_loop_duration_micros() << ", ";
+    std::cout << std::endl;
+  }
+
+private:
+  unsigned int iterations;
+};
+
+
+
+
+
+
+
+// State must comply with State Interface (see IState.h)
+// Action can be anything (which your State class knows how to handle)
+//template <class State, typename Action>
+class UCT {
+  typedef TreeNodeT TreeNode;
+
+private:
+  LoopTimer timer;
+  int iterations;
+
+public:
+  float uct_k;					// k value in UCT function. default = sqrt(2)
+  unsigned int max_iterations;	// do a maximum of this many iterations (0 to run till end)
+  unsigned int max_millis;		// run for a maximum of this many milliseconds (0 to run till end)
+  unsigned int simulation_depth;	// how many ticks (frames) to run simulation for
+
+  //--------------------------------------------------------------
+  UCT() :
+    iterations(0),
+    uct_k( sqrt(2) ), 
+    max_iterations( 100 ),
+    max_millis( 0 ),
+    simulation_depth( 10 )
+  {}
+
+
+  //--------------------------------------------------------------
+  const LoopTimer & get_timer() const {
+    return timer;
+  }
+
+  int get_iterations() const {
+    return iterations;
+  }
+
+  //--------------------------------------------------------------
+  // get best (immediate) child for given TreeNode based on uct score
+  TreeNode* get_best_uct_child(TreeNode* node, float uct_k) const {
+    // sanity check
+    if(!node->is_fully_expanded()) return NULL;
+
+    float best_utc_score = -std::numeric_limits<float>::max();
+    TreeNode* best_node = NULL;
+
+    // iterate all immediate children and find best UTC score
+    int num_children = node->get_num_children();
+    for(int i = 0; i < num_children; i++) {
+      TreeNode* child = node->get_child(i);
+      float uct_exploitation = (float)child->get_value() / (child->get_num_visits() + FLT_EPSILON);
+      float uct_exploration = sqrt( log((float)node->get_num_visits() + 1) / (child->get_num_visits() + FLT_EPSILON) );
+      float uct_score = uct_exploitation + uct_k * uct_exploration;
+
+      if(uct_score > best_utc_score) {
+	best_utc_score = uct_score;
+	best_node = child;
+      }
+    }
+
+    return best_node;
+  }
+
+
+  //--------------------------------------------------------------
+  TreeNode* get_most_visited_child(TreeNode* node) const {
+    int most_visits = -1;
+    TreeNode* best_node = NULL;
+
+    // iterate all immediate children and find most visited
+    int num_children = node->get_num_children();
+    for(int i = 0; i < num_children; i++) {
+      TreeNode* child = node->get_child(i);
+      if(child->get_num_visits() > most_visits) {
+	most_visits = child->get_num_visits();
+	best_node = child;
+      }
+    }
+
+    return best_node;
+  }
+
+
+
+  //--------------------------------------------------------------
+  fv_actions_t run(const game_stat& current_state, unsigned int seed = 1, vector<game_stat>* explored_states = nullptr) {
+    // initialize timer
+    timer.init();
+
+    // initialize root TreeNode with current state
+    TreeNode root_node(current_state);
+
+    TreeNode* best_node = NULL;
+
+    // iterate
+    iterations = 0;
+    while(true) {
+      // indicate start of loop
+      // cerr << " it " << iterations <<  endl;
+      timer.loop_start();
+
+      // 1. SELECT. Start at root, dig down into tree using UCT on all fully expanded nodes
+      TreeNode* node = &root_node;
+      while(!node->is_terminal() && node->is_fully_expanded())
+	{
+	  //cerr << " while " << endl;
+	  node = get_best_uct_child(node, uct_k);
+	  //						assert(node);	// sanity check
+	}
+
+      //cerr << " ap while " << endl;
+      // 2. EXPAND by adding a single child (if not terminal or not fully expanded)
+      if(!node->is_fully_expanded() && !node->is_terminal()) node = node->expand();
+                    
+      game_stat state_simul(node->get_state());
+      //game_stat state;
+
+      // 3. SIMULATE (if not terminal)
+      if(!node->is_terminal()) {
+	fv_actions_t action;
+	for(unsigned int t = 0; t < simulation_depth; t++)
+	  {
+	    //cerr << " simu " << endl;
+
+	    if(state_simul.is_terminal()) break;
+
+	    //if(state.create_random_action(action))
+	    //{
+	    //state.create_random_action(action);
+	    state_simul.get_one_random_action(action);
+	    //game_stat new_state;
+	    state_simul.apply_action_mcts(action,state_simul);
+	    //state_simul = new_state;
+	    //state.apply_action(action);
+	    // }
+	    //else
+	    // break;
+	  }
+      }
+
+      // get rewards vector for all agents
+      float rewards = state_simul.evaluate();
+
+      // add to history
+      if(explored_states) explored_states->push_back(state_simul);
+
+      // 4. BACK PROPAGATION
+      while(node) {
+	node->update(rewards);
+	node = node->get_parent();
+      }
+
+      // find most visited child
+      best_node = get_most_visited_child(&root_node);
+
+      // indicate end of loop for timer
+      timer.loop_end();
+
+      // exit loop if current total run duration (since init) exceeds max_millis
+      if(max_millis > 0 && timer.check_duration(max_millis)) break;
+
+      // exit loop if current iterations exceeds max_iterations
+      if(max_iterations > 0 && iterations > max_iterations) break;
+      iterations++;
+    }
+
+    // return best node's action
+    if(best_node) return best_node->get_action();
+
+    // we shouldn't be here
+    fv_actions_t aa;
+		
+    //current_state.get_one_random_action(aa);
+    cerr << " HE UUUU " << endl;
+    return aa;
+  }
+
+
+};
+ 
 //#############" MCTS END
 int main()
 {
   srand(time(NULL));
   game_stat gs;
-    // game loop
+  // game loop
 
   //precompute
  
@@ -1724,18 +1809,18 @@ int main()
       gs.update_state();
       gs.print_state();
 
-      msa::mcts::UCT uct;
+      UCT uct;
       uct.uct_k = sqrt(2);
-      uct.max_millis = 50;
+      uct.max_millis = 4400;
       uct.max_iterations = 000;
-      uct.simulation_depth = 50;
+      uct.simulation_depth = 20;
       
       cerr << " UCT " << endl;
       fv_actions_t a_mcts = uct.run(gs);
 
       //cerr << ac << endl;
       cerr << "END  UCT " << uct.get_iterations() << endl;
-      //      return 1;
+      return 1;
       //cerr << " BENCH " << endl;
 
       //bench(gs);
@@ -1743,11 +1828,11 @@ int main()
 
       for (action &a:a_mcts) {
 
-            // Write an action using cout. DON'T FORGET THE "<< endl"
-            // To debug: cerr << "Debug messages..." << endl;
+	// Write an action using cout. DON'T FORGET THE "<< endl"
+	// To debug: cerr << "Debug messages..." << endl;
 
-            cout << a << endl; // Any valid action, such as "WAIT" or "MOVE x y"
-        }
+	cout << a << endl; // Any valid action, such as "WAIT" or "MOVE x y"
+      }
     }
 }
 
