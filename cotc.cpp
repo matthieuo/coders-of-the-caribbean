@@ -58,12 +58,13 @@ class fast_vect
 {
 public:
 
-  /* fast_vect(const fast_vect& fv)
-     {
-     memcpy(arr,fv.arr,fv.size*sizeof(T));
-     size = fv.size;
-     }
-     fast_vect &operator=(const fast_vect& f){}*/
+  fast_vect():size(0){}
+  inline fast_vect(const fast_vect& fv)
+  {
+    memcpy(arr,fv.arr,fv.size*sizeof(T));
+    size = fv.size;
+  }
+  //     fast_vect &operator=(const fast_vect& f){}
   T arr[N];
   int size = 0;
 
@@ -552,7 +553,7 @@ public:
 
   int simul_next_state(fv_actions_t a_play, fv_actions_t a_adv, game_stat& new_gs) const
   {
-    new_gs = *this;
+    //new_gs = *this;
 
 
     
@@ -1245,7 +1246,10 @@ public:
 
     
     
-    return speed + my_sh - adv_sh + my_rhum - adv_rhum;
+    float eval = speed + my_sh - adv_sh + my_rhum - adv_rhum;
+
+    //    cerr << eval << endl;
+    return eval;
   }
   
   inline int get_my_ship_count() const
@@ -1411,6 +1415,7 @@ public:
   //--------------------------------------------------------------
   void update(float rewards) {
     this->value += rewards;
+    this->value /=2 ;
     num_visits++;
   }
 
@@ -1811,16 +1816,17 @@ int main()
 
       UCT uct;
       uct.uct_k = sqrt(2);
-      uct.max_millis = 4400;
-      uct.max_iterations = 000;
-      uct.simulation_depth = 20;
-      
+      uct.max_millis = 44;
+      uct.max_iterations = 100;
+      uct.simulation_depth = 10;
+
+            cerr << " rr " << gs.evaluate() << endl;
       cerr << " UCT " << endl;
       fv_actions_t a_mcts = uct.run(gs);
 
       //cerr << ac << endl;
       cerr << "END  UCT " << uct.get_iterations() << endl;
-      return 1;
+      //return 1;
       //cerr << " BENCH " << endl;
 
       //bench(gs);
