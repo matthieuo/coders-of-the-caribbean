@@ -5,10 +5,10 @@ Coders of the Caribbean  [codingame](https://www.codingame.com/)  challenge
 
 ## AI implemented
 
-The code implements a [MCTS](https://en.wikipedia.org/wiki/MCTS) for action selection.
+The code implements a [MCTS](https://en.wikipedia.org/wiki/Monte_Carlo_tree_search) (Monte Carlo Tree Search) with UCB tree selection policy for action selection.
 
-MCTS tree are expanded acording to 5 ACTIONS per boat. 3 moves action and 2 FIRE action. FIRE actions are created for each game state.
-Opponents are also modelised by 5 possible actions.
+MCTS tree are expanded with five actions per boat. Three move actions and two fire actions. Fire actions are created for each game state.
+Opponents are also modelised by five possible actions.
 
 ## Credits
 
