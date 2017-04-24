@@ -1058,9 +1058,11 @@ public:
 		    ptmp = s.p;
 		  }
 	      }
-	    act_adv[i][0].arg = ptmp;
-	    act_adv[i][0].act = FIRE;
-	    
+	    if(dist <= FIRE_DISTANCE_MAX)
+	      {
+		act_adv[i][0].arg = ptmp;
+		act_adv[i][0].act = FIRE;
+	      }
 	    dist = 10000;
 	    //mine option
 	    for(const mine &s:mines)
@@ -1072,8 +1074,11 @@ public:
 		    ptmp = s.p;
 		  }
 	      }
-	    act_adv[i][1].arg = ptmp;
-	    act_adv[i][1].act = FIRE;
+	    if(dist <= FIRE_DISTANCE_MAX)
+	      {
+		act_adv[i][1].arg = ptmp;
+		act_adv[i][1].act = FIRE;
+	      }
 	  }
 
 
@@ -1111,8 +1116,11 @@ public:
 		    ptmp = s.p;
 		  }
 	      }
-	    act[i][0].arg = ptmp;
-	    act[i][0].act = FIRE;
+	    if(dist <= FIRE_DISTANCE_MAX)
+	      {
+		act[i][0].arg = ptmp;
+		act[i][0].act = FIRE;
+	      }
 	    
 	    dist = 10000;
 	    //mine option
@@ -1125,8 +1133,11 @@ public:
 		    ptmp = s.p;
 		  }
 	      }
-	    act[i][1].arg = ptmp;
-	    act[i][1].act = FIRE;
+	    if(dist <= FIRE_DISTANCE_MAX)
+	      {
+		act[i][1].arg = ptmp;
+		act[i][1].act = FIRE;
+	      }
 	  }
 
 
@@ -1244,12 +1255,20 @@ public:
     float speed = 0;
 
     float center_dist = 0;
+    float boat_dist = 0;
     for(const ship &s:my_ships)
       {
+	for(const ship &s2:my_ships)
+	  {
+	    if(s2.id == s.id) continue;
+	    boat_dist += s.p.distanceTo(s2.p);
+	  }
 	my_rhum += s.rhum;
 	speed += s.speed;
 
 	center_dist += s.p.distanceTo({12,10});
+
+	
       }
 
     for(const ship &s:adv_ships)
@@ -1259,7 +1278,7 @@ public:
     //be at the center
     
     
-    float eval = 0.5*speed - 0.5*center_dist + 20*(0.9*my_sh - adv_sh) + 10*(0.9*my_rhum - adv_rhum);
+    float eval = speed  -4*boat_dist - 4*center_dist + 20*(my_sh - adv_sh) + 10*(my_rhum - adv_rhum);
 
     //cerr << eval << endl;
     return eval;
@@ -1364,6 +1383,7 @@ void bench(const game_stat &gs)
 }
 //############## MCTS ##############
 
+//somep parts of the MCTS implementation are from https://github.com/memo/ofxMSAmcts
 
 class TreeNodeT {
 
@@ -1769,8 +1789,8 @@ public:
 
 	// find best child
 	//if(!root_node.is_fully_expanded())
-	//best_node = get_most_visited_child(&root_node);
-	best_node = get_most_reward_child(&root_node);
+	best_node = get_most_visited_child(&root_node);
+	//best_node = get_most_reward_child(&root_node);
 	  //else
 	  //best_node = get_best_uct_child(&root_node, uct_k);
 	
@@ -1826,8 +1846,16 @@ int main()
       //      msa::LoopTimer::test(500);
       cerr << " OK " << endl;
       gs.update_state();
-      gs.print_state();
+      
 
+
+      /*      fv_actions_t actionn;
+      gs.get_one_random_action(actionn);
+      //game_stat new_state;
+      gs.apply_action_mcts(actionn,gs);
+      gs.print_state();
+      return 1;*/
+      
       UCT uct;
       uct.uct_k = sqrt(2);
       uct.max_millis = 44;
